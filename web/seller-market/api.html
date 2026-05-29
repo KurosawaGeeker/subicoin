@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Subi API</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <nav class="top-nav" aria-label="主导航">
+      <div class="nav-inner">
+        <a class="brand" href="./index.html" aria-label="Subi 首页">
+          <span class="brand-mark" aria-hidden="true">S</span>
+          <span>Subi</span>
+        </a>
+        <div class="nav-links">
+          <a href="./index.html">首页</a>
+          <a href="./client.html">客户端</a>
+          <a href="./earnings.html">收益</a>
+          <a class="active" href="./api.html">API</a>
+        </div>
+        <div class="nav-actions">
+          <div class="language-toggle" aria-label="语言">
+            <button class="active" type="button">中文</button>
+            <button type="button">EN</button>
+          </div>
+          <button class="login-btn" type="button">登录</button>
+        </div>
+      </div>
+    </nav>
+
+    <main class="page-main">
+      <section class="page-header">
+        <a class="back-link" href="./index.html">← 返回首页</a>
+        <h1>给买家一个可替换的便宜 token endpoint。</h1>
+        <p>
+          买家继续使用 OpenAI-compatible 客户端原本读取的环境变量名。只需要把值换成 Subi Gateway URL 和 Subi buyer key。
+        </p>
+      </section>
+
+      <section class="api-grid">
+        <article class="api-card">
+          <span class="card-label">买家配置</span>
+          <h2>Codex CLI</h2>
+          <div class="code-block">
+            <button class="code-copy" type="button">复制</button>
+            <pre><code>export OPENAI_BASE_URL="https://api.subi.xyz/v1"
+export OPENAI_API_KEY="sk-subi_xxx"
+
+codex \
+  -c 'model_provider="subi"' \
+  -c 'model_providers.subi.name="Subi"' \
+  -c "model_providers.subi.base_url=\"${OPENAI_BASE_URL}\"" \
+  -c 'model_providers.subi.env_key="OPENAI_API_KEY"' \
+  -c 'model_providers.subi.wire_api="responses"'</code></pre>
+          </div>
+        </article>
+
+        <article class="api-card">
+          <span class="card-label">卖家节点</span>
+          <h2>Provider 节点</h2>
+          <div class="code-block">
+            <button class="code-copy" type="button">复制</button>
+            <pre><code>export SUBI_GATEWAY_WS_URL="wss://api.subi.xyz/api/v1/subi/seller/agent/ws"
+export SUBI_SELLER_NODE_TOKEN="seller_node_xxx"
+export SUBI_NODE_ID="seller-001"
+export SELLER_UPSTREAM_MODE="codex-app-server"
+
+./seller-agent</code></pre>
+          </div>
+        </article>
+      </section>
+
+      <section class="docs-card">
+        <h2>买家和卖家都能看懂的错误</h2>
+        <div class="error-grid">
+          <div>
+            <strong>401</strong>
+            <span>API key 或 seller token 无效</span>
+          </div>
+          <div>
+            <strong>402</strong>
+            <span>后续计费流程中代表买家余额不足</span>
+          </div>
+          <div>
+            <strong>429</strong>
+            <span>并发限制已达到</span>
+          </div>
+          <div>
+            <strong>503</strong>
+            <span>当前没有可用卖家节点</span>
+          </div>
+          <div>
+            <strong>504</strong>
+            <span>卖家节点或本地 upstream 超时</span>
+          </div>
+          <div>
+            <strong>529</strong>
+            <span>Provider 临时过载</span>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>Subi · API · 便宜编程 token</span>
+      <span>|</span>
+      <a href="./client.html">客户端</a>
+      <a href="./earnings.html">收益</a>
+    </footer>
+
+    <nav class="mobile-nav" aria-label="移动端导航">
+      <a href="./index.html">首页</a>
+      <a href="./client.html">客户端</a>
+      <a href="./earnings.html">收益</a>
+      <a class="active" href="./api.html">API</a>
+      <button type="button">账户</button>
+    </nav>
+
+    <div class="toast" id="toast" role="status" aria-live="polite">已复制</div>
+    <script src="./app.js"></script>
+  </body>
+</html>

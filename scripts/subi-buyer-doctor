@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+MODEL="${SUBI_DOCTOR_MODEL:-gpt-5.5}"
+PROMPT="${SUBI_DOCTOR_PROMPT:-Reply exactly: SUBI_BUYER_DOCTOR_OK}"
+EXPECTED="SUBI_BUYER_DOCTOR_OK"
+
+fail() {
+  printf 'fail: %s\n' "$*" >&2
+  exit 1
+}
+
+warn() {
+  printf 'warn: %s\n' "$*" >&2
+}
+
+pass() {
+  printf 'ok: %s\n' "$*"
+}
+
+need_cmd() {
+  command -v "$1" >/dev/null 2>&1 || fail "$1 is required"
+}
+
+mask_secret() {
+  local value="$1"
+  local len=${#value}
+  if (( len <= 8 )); then
+    printf '<set:%s chars>' "$len"
+    return
+  fi
+  printf '%s...%s' "${value:0:4}" "${value: -4}"
+}
+
+strip_trailing_slash() {
+  local value="$1"
+  while [[ "$value" == */ ]]; do
+    value="${value%/}"
+  done
+  printf '%s' "$value"
+}
+
+need_cmd curl
+
+BASE_URL="${OPENAI_BASE_URL:-}"
+API_KEY="${OPENAI_API_KEY:-}"
+
+[[ -n "$BASE_URL" ]] || fail 'OPENAI_BASE_URL is not set'
+[[ -n "$API_KEY" ]] || fail 'OPENAI_API_KEY is not set; it should contain your Subi buyer key'
+
+BASE_URL="$(strip_trailing_slash "$BASE_URL")"
+
+if [[ "$BASE_URL" != */v1 ]]; then
+  fail "OPENAI_BASE_URL must point to the Subi /v1 endpoint, got: $BASE_URL"
+fi
+
+GATEWAY_URL="${BASE_URL%/v1}"
+HEALTH_URL="$GATEWAY_URL/health"
+RESPONSES_URL="$BASE_URL/responses"
+
+pass "OPENAI_BASE_URL=$BASE_URL"
+pass "OPENAI_API_KEY=$(mask_secret "$API_KEY")"
+
+health_code="$(curl -sS -o /tmp/subi-buyer-doctor-health.json -w '%{http_code}' --max-time 10 "$HEALTH_URL" || true)"
+if [[ "$health_code" != "200" ]]; then
+  body="$(tr -d '\n' </tmp/subi-buyer-doctor-health.json 2>/dev/null | head -c 300 || true)"
+  fail "gateway health check failed: GET $HEALTH_URL -> HTTP $health_code ${body}"
+fi
+pass "gateway health reachable"
+
+payload="$(printf '{"model":"%s","input":"%s","stream":false}' "$MODEL" "$PROMPT")"
+response_file="$(mktemp -t subi-buyer-doctor-response.XXXXXX)"
+response_code="$(
+  curl -sS -o "$response_file" -w '%{http_code}' --max-time "${SUBI_DOCTOR_TIMEOUT:-120}" \
+    "$RESPONSES_URL" \
+    -H "Authorization: Bearer $API_KEY" \
+    -H 'Content-Type: application/json' \
+    -d "$payload" || true
+)"
+
+response_body="$(tr -d '\n' <"$response_file" | head -c 1200 || true)"
+rm -f "$response_file" /tmp/subi-buyer-doctor-health.json
+
+case "$response_code" in
+  200)
+    ;;
+  401|403)
+    fail "buyer key rejected: POST $RESPONSES_URL -> HTTP $response_code ${response_body}"
+    ;;
+  503)
+    fail "buyer key was accepted, but no seller is available or seller is busy: HTTP $response_code ${response_body}"
+    ;;
+  000)
+    fail "responses probe could not reach gateway: POST $RESPONSES_URL"
+    ;;
+  *)
+    fail "responses probe failed: POST $RESPONSES_URL -> HTTP $response_code ${response_body}"
+    ;;
+esac
+
+if [[ "$response_body" != *"$EXPECTED"* ]]; then
+  warn "responses probe returned HTTP 200 but expected marker was not found"
+  warn "body preview: $response_body"
+else
+  pass "responses probe returned $EXPECTED"
+fi
+
+pass 'buyer environment is ready'

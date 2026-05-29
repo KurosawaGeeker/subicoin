@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+NODE_ID="${1:-seller-002}"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ENV_FILE="${SUBI_MVP0_ENV_FILE:-/tmp/subi_mvp0.env}"
+LOG_FILE="${SUBI_SELLER_LOG_FILE:-/tmp/subi_seller_agent.log}"
+SCREEN_NAME="${SUBI_SELLER_SCREEN_NAME:-subi-seller-agent}"
+
+if [ ! -f "$ENV_FILE" ]; then
+  echo "ERROR: env file not found: $ENV_FILE" >&2
+  exit 2
+fi
+
+if [ ! -x "$ROOT/dist/seller-agent-darwin-arm64" ]; then
+  echo "ERROR: missing executable: $ROOT/dist/seller-agent-darwin-arm64" >&2
+  exit 2
+fi
+
+if ! command -v screen >/dev/null 2>&1; then
+  echo "ERROR: screen is required on this seller machine" >&2
+  exit 2
+fi
+
+screen -S "$SCREEN_NAME" -X quit >/dev/null 2>&1 || true
+pkill -f '[s]eller-agent-darwin-arm64' >/dev/null 2>&1 || true
+sleep 1
+
+screen -dmS "$SCREEN_NAME" zsh -lc "
+  set -euo pipefail
+  source '$ENV_FILE'
+  mkdir -p /tmp/subi-codex-work
+  cd '$ROOT'
+  exec env \\
+    SUBI_GATEWAY_WS_URL=\"\$GATEWAY_WS\" \\
+    SUBI_SELLER_NODE_TOKEN=\"\$SUBI_SELLER_NODE_TOKEN\" \\
+    SUBI_NODE_ID='$NODE_ID' \\
+    SELLER_UPSTREAM_MODE='codex-exec' \\
+    SELLER_CODEX_BIN=\"\$(command -v codex)\" \\
+    SELLER_CODEX_MODEL='gpt-5.5' \\
+    SELLER_CODEX_WORKDIR='/tmp/subi-codex-work' \\
+    SELLER_CODEX_SANDBOX='read-only' \\
+    SELLER_CODEX_EXTRA_ARGS='--ephemeral --ignore-user-config' \\
+    ./dist/seller-agent-darwin-arm64 >>'$LOG_FILE' 2>&1
+"
+
+sleep 2
+
+echo "seller-agent restarted as node=$NODE_ID"
+screen -ls | grep "$SCREEN_NAME" || true
+tail -n 20 "$LOG_FILE" || true

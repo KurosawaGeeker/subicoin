@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+GO_IMAGE="${GO_IMAGE:-golang:1.26.3-alpine}"
+
+docker run --rm \
+  -v "$ROOT":/workspace \
+  -v sub2api-gomod:/go/pkg/mod \
+  -v sub2api-gocache:/root/.cache/go-build \
+  -w /workspace/backend \
+  "$GO_IMAGE" \
+  go test ./internal/service ./cmd/subi-gateway \
+    -run 'SubiSession|SubiAssistant|GatewaySession|GatewayNoSeller' \
+    -count=1 -v

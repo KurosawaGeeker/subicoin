@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Subi 卖家客户端</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <nav class="top-nav" aria-label="主导航">
+      <div class="nav-inner">
+        <a class="brand" href="./index.html" aria-label="Subi 首页">
+          <span class="brand-mark" aria-hidden="true">S</span>
+          <span>Subi</span>
+        </a>
+        <div class="nav-links">
+          <a href="./index.html">首页</a>
+          <a class="active" href="./client.html">客户端</a>
+          <a href="./earnings.html">收益</a>
+          <a href="./api.html">API</a>
+        </div>
+        <div class="nav-actions">
+          <div class="language-toggle" aria-label="语言">
+            <button class="active" type="button">中文</button>
+            <button type="button">EN</button>
+          </div>
+          <button class="login-btn" type="button">登录</button>
+        </div>
+      </div>
+    </nav>
+
+    <main class="page-main">
+      <section class="page-header">
+        <a class="back-link" href="./index.html">← 返回首页</a>
+        <h1>启动本地进程，把你的电脑变成卖家节点。</h1>
+        <p>
+          Subi 不要求你把账号挂到网页上。订阅登录态留在你的设备里，卖家客户端只和 Gateway 保持一条长连接。
+        </p>
+      </section>
+
+      <figure class="client-photo">
+        <img
+          src="https://picsum.photos/seed/subi-seller-laptop/1200/760"
+          alt="一台保持在线的卖家节点电脑"
+        />
+      </figure>
+
+      <section class="download-row">
+        <article class="download-tile active">
+          <span>Linux</span>
+          <h2>CLI Agent</h2>
+          <p>当前 MVP 主路径。构建 seller-agent 二进制文件，然后保持它在后台运行。</p>
+          <button class="primary-action" type="button">开始接入</button>
+        </article>
+        <article class="download-tile">
+          <span>macOS</span>
+          <h2>GUI 客户端</h2>
+          <p>菜单栏常驻、Provider 状态、自动重连和收益查看。</p>
+          <button class="secondary-action" type="button">下载</button>
+        </article>
+        <article class="download-tile">
+          <span>VPS</span>
+          <h2>后台常驻</h2>
+          <p>适合 24 小时供给。用 nohup 或 systemd 运行同一个 agent。</p>
+          <button class="secondary-action" type="button">查看教程</button>
+        </article>
+      </section>
+
+      <section class="client-layout">
+        <article class="client-card">
+          <div class="client-tabs" role="tablist" aria-label="卖家 Provider 选项">
+            <button class="active" type="button" role="tab" aria-selected="true" data-provider="codex">
+              Codex
+            </button>
+            <button type="button" role="tab" aria-selected="false" data-provider="claude">
+              Claude
+            </button>
+            <button type="button" role="tab" aria-selected="false" data-provider="http">
+              HTTP
+            </button>
+            <button type="button" role="tab" aria-selected="false" data-provider="vps">
+              VPS
+            </button>
+          </div>
+          <div id="provider-content" aria-live="polite"></div>
+        </article>
+
+        <aside class="client-side-card">
+          <h3>seller-macbook-001</h3>
+          <div class="node-row">
+            <span>状态</span>
+            <b>在线</b>
+          </div>
+          <div class="node-row">
+            <span>模式</span>
+            <b>codex-app-server</b>
+          </div>
+          <div class="node-row">
+            <span>最大接入数</span>
+            <b>1 worker</b>
+          </div>
+          <div class="node-row">
+            <span>运行边界</span>
+            <b>只读沙箱</b>
+          </div>
+          <button class="secondary-action full-width" id="run-doctor" type="button">运行自检</button>
+        </aside>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>Subi · 卖家客户端 · 本地进程，长连接</span>
+      <span>|</span>
+      <a href="./earnings.html">收益</a>
+      <a href="./api.html">API</a>
+    </footer>
+
+    <nav class="mobile-nav" aria-label="移动端导航">
+      <a href="./index.html">首页</a>
+      <a class="active" href="./client.html">客户端</a>
+      <a href="./earnings.html">收益</a>
+      <a href="./api.html">API</a>
+      <button type="button">账户</button>
+    </nav>
+
+    <div class="toast" id="toast" role="status" aria-live="polite">已复制</div>
+    <script src="./app.js"></script>
+  </body>
+</html>

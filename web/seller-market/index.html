@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Subi 卖家市场</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <nav class="top-nav" aria-label="主导航">
+      <div class="nav-inner">
+        <a class="brand" href="./index.html" aria-label="Subi 首页">
+          <span class="brand-mark" aria-hidden="true">S</span>
+          <span>Subi</span>
+        </a>
+
+        <div class="nav-links">
+          <a class="active" href="./index.html">首页</a>
+          <a href="./client.html">客户端</a>
+          <a href="./earnings.html">收益</a>
+          <a href="./api.html">API</a>
+        </div>
+
+        <div class="nav-actions">
+          <div class="language-toggle" aria-label="语言">
+            <button class="active" type="button">中文</button>
+            <button type="button">EN</button>
+          </div>
+          <button class="login-btn" type="button">登录</button>
+        </div>
+      </div>
+    </nav>
+
+    <main>
+      <section id="home" class="hero">
+        <div class="hero-image" aria-hidden="true"></div>
+        <div class="hero-overlay" aria-hidden="true"></div>
+        <div class="hero-content">
+          <p class="kicker">P2P 编程 Token 市场</p>
+          <h1>给 coding 兄弟便宜 token 用。<br />开着电脑就能赚钱。</h1>
+          <p class="hero-copy">
+            买家低价用顶级模型，卖家把本机 Codex 或 Claude 订阅挂到 Subi，按有效请求赚钱。
+          </p>
+
+          <div class="hero-actions">
+            <a class="primary-action" href="./client.html">开始接入</a>
+            <a class="secondary-action" href="#how-it-works">了解流程</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="section estimate-section" id="earnings">
+        <div class="estimate-copy">
+          <h2>订阅费可以自己赚回来。</h2>
+          <p>
+            保持卖家客户端在线。Subi 按负载路由有效请求，记录每一次 fill，并把账号登录态留在你自己的机器上。
+          </p>
+        </div>
+        <article class="estimate-card">
+          <p>月收益估算</p>
+          <strong>+$24</strong>
+          <span>每月净收益</span>
+          <div class="estimate-divider"></div>
+          <div class="estimate-line">
+            <span>Codex 订阅</span>
+            <b>-$20/mo</b>
+          </div>
+          <div class="estimate-line">
+            <span>卖家平均收益</span>
+            <b class="positive">+$44/mo</b>
+          </div>
+        </article>
+      </section>
+
+      <section id="how-it-works" class="section alt-section">
+        <div class="section-heading">
+          <h2>三步开始赚钱</h2>
+        </div>
+        <div class="steps">
+          <article class="step-card step-card-large">
+            <span>安装</span>
+            <h3>邮箱登录</h3>
+            <p>创建卖家账号，绑定后续用于 Subi 结算的钱包。</p>
+          </article>
+          <div class="step-stack">
+            <article class="step-card">
+              <span>接入</span>
+              <h3>启动卖家客户端</h3>
+              <p>我们不让你在网页上挂账号，而是在你的机器上运行本地后台进程。</p>
+            </article>
+            <article class="step-card">
+              <span>赚钱</span>
+              <h3>承接平台路由请求</h3>
+              <p>Subi 自动分配负载。你不挑单、不报价，按有效请求获得收益。</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section trust-section">
+        <div class="trust-grid">
+          <article>
+            <h2>一个账号。一台机器。一个稳定 IP。</h2>
+            <p>
+              Subi 不把你的登录态放进共享账号池。订阅状态留在卖家机器上，Seller Agent 只和 Gateway 保持长连接。
+            </p>
+          </article>
+          <article>
+            <h2>买家的 shell 不会跑在卖家设备上。</h2>
+            <p>
+              买家的读文件、改代码和命令执行都在买家本机。卖家客户端只负责把模型请求变成模型响应，并受并发和运行边界限制。
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section alt-section cta-section">
+        <div class="section-heading">
+          <h2>下载卖家客户端，让节点保持在线。</h2>
+        </div>
+        <div class="center-actions">
+          <a class="primary-action" href="./client.html">开始接入</a>
+          <a class="secondary-action" href="./earnings.html">查看收益</a>
+        </div>
+      </section>
+
+      <section class="section network-section">
+        <div class="section-heading">
+          <h2>为愿意保持机器在线的卖家而建。</h2>
+        </div>
+        <div class="network-stats">
+          <article>
+            <strong>--</strong>
+            <span>在线卖家节点</span>
+          </article>
+          <article>
+            <strong>--</strong>
+            <span>24 小时请求</span>
+          </article>
+          <article>
+            <strong>80/15/5</strong>
+            <span>卖家 / 平台 / 准备金</span>
+          </article>
+        </div>
+        <div class="network-note">
+          <p>
+            当前页面使用 mock 数据。正式收益会来自 Request Fill 账本和小时结算。
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>Subi · 便宜编程 token · 开着电脑就能赚钱</span>
+      <span>|</span>
+      <a href="./client.html">客户端</a>
+      <a href="./api.html">API</a>
+    </footer>
+
+    <nav class="mobile-nav" aria-label="移动端导航">
+      <a class="active" href="./index.html">首页</a>
+      <a href="./client.html">客户端</a>
+      <a href="./earnings.html">收益</a>
+      <a href="./api.html">API</a>
+      <button type="button">账户</button>
+    </nav>
+
+    <div class="toast" id="toast" role="status" aria-live="polite">已复制</div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

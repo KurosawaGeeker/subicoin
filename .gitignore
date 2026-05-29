@@ -1,0 +1,43 @@
+# OS/editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Local env and secrets
+.env
+.env.*
+*.env
+!.env.example
+backend/config.yaml
+/tmp/
+/temp/
+
+# Build outputs
+/dist/
+/build/
+/release/
+backend/bin/
+*.test
+*.out
+coverage.html
+
+# Logs and caches
+*.log
+.cache/
+.gocache/
+backend/.gocache/
+vendor/
+
+# Local runtime data from previous sub2api experiments
+/deploy/
+
+# Codex/local assistant state
+.codex/
+.serena/
+.claude/
+CLAUDE.md
+AGENTS.md

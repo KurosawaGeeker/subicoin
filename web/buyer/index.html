@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Subi Buyer Console</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="#dashboard" aria-label="Subi Buyer Console">
+        <span class="brand-mark">S</span>
+        <span>Subi</span>
+      </a>
+      <nav class="nav" aria-label="Buyer navigation">
+        <a href="#dashboard">Dashboard</a>
+        <a href="#credits">Credits</a>
+        <a href="#setup">Setup</a>
+        <a href="#usage">Usage</a>
+      </nav>
+      <div class="top-balance">
+        <i data-lucide="wallet" aria-hidden="true"></i>
+        <span>1,248 Credits</span>
+      </div>
+    </header>
+
+    <main class="page-shell">
+      <section id="dashboard" class="hero-console" aria-labelledby="dashboard-title">
+        <div class="hero-copy">
+          <h1 id="dashboard-title">Top coding models, cheaper through P2P.</h1>
+          <p class="hero-subcopy">
+            Buy credits once. Use one Subi key across your coding clients without extra network setup.
+          </p>
+          <div class="value-strip" aria-label="Buyer value propositions">
+            <span><i data-lucide="wifi" aria-hidden="true"></i>No proxy required</span>
+            <span><i data-lucide="badge-percent" aria-hidden="true"></i>Lower-cost top models</span>
+            <span><i data-lucide="network" aria-hidden="true"></i>P2P supply network</span>
+          </div>
+          <div class="hero-actions">
+            <button class="btn btn-primary" type="button" data-scroll-target="#credits">
+              <i data-lucide="credit-card" aria-hidden="true"></i>
+              Buy Credits
+            </button>
+            <button class="btn btn-secondary" type="button" data-scroll-target="#setup">
+              <i data-lucide="terminal" aria-hidden="true"></i>
+              Setup
+            </button>
+          </div>
+        </div>
+
+        <aside class="balance-panel" aria-label="Buyer credits overview">
+          <div class="balance-main">
+            <span>Your Credits</span>
+            <strong>1,248</strong>
+            <p>Estimated for 416 short coding requests.</p>
+          </div>
+          <div class="balance-row">
+            <span>Today spend</span>
+            <strong>32</strong>
+          </div>
+          <div class="balance-row">
+            <span>Requests</span>
+            <strong>9</strong>
+          </div>
+        </aside>
+      </section>
+
+      <section class="panel access-panel" aria-labelledby="access-title">
+        <div class="panel-heading">
+          <div>
+            <h2 id="access-title">Your Subi access</h2>
+            <p class="panel-subcopy">
+              Claude Code does not need a separate key. Use the same Subi buyer key with the
+              Anthropic-compatible URL.
+            </p>
+          </div>
+          <button class="btn btn-secondary compact" type="button" id="reveal-key">
+            <i data-lucide="eye" aria-hidden="true"></i>
+            Reveal key
+          </button>
+        </div>
+        <div class="copy-grid access-grid">
+          <label class="copy-field">
+            <span>SUBI BUYER API KEY</span>
+            <input id="api-key" readonly type="password" value="sk-subi_live_7K4m9xQp2aDemoKey" />
+            <button class="icon-btn" type="button" data-copy-target="api-key" aria-label="Copy Subi buyer API key">
+              <i data-lucide="copy" aria-hidden="true"></i>
+            </button>
+          </label>
+          <label class="copy-field">
+            <span>OPENAI_BASE_URL</span>
+            <input id="openai-base-url" readonly value="https://api.subi.xyz/v1" />
+            <button class="icon-btn" type="button" data-copy-target="openai-base-url" aria-label="Copy OpenAI base URL">
+              <i data-lucide="copy" aria-hidden="true"></i>
+            </button>
+          </label>
+          <label class="copy-field">
+            <span>ANTHROPIC_BASE_URL</span>
+            <input id="anthropic-base-url" readonly value="https://api.subi.xyz" />
+            <button class="icon-btn" type="button" data-copy-target="anthropic-base-url" aria-label="Copy Claude Code base URL">
+              <i data-lucide="copy" aria-hidden="true"></i>
+            </button>
+          </label>
+        </div>
+      </section>
+
+      <section id="credits" class="panel" aria-labelledby="credits-title">
+        <div class="panel-heading">
+          <div>
+            <h2 id="credits-title">Buy credits</h2>
+          </div>
+          <span class="muted-pill">Off-chain MVP balance</span>
+        </div>
+        <div class="credit-plans" aria-label="Credit plans">
+          <article class="plan-card">
+            <span>Starter</span>
+            <strong>100</strong>
+            <p>Quick test budget.</p>
+            <button class="btn btn-secondary full" type="button">
+              <i data-lucide="plus" aria-hidden="true"></i>
+              Add 100
+            </button>
+          </article>
+          <article class="plan-card selected">
+            <span>Builder</span>
+            <strong>500</strong>
+            <p>Daily coding usage.</p>
+            <button class="btn btn-primary full" type="button">
+              <i data-lucide="plus" aria-hidden="true"></i>
+              Add 500
+            </button>
+          </article>
+          <article class="plan-card">
+            <span>Studio</span>
+            <strong>2,000</strong>
+            <p>Heavy sessions.</p>
+            <button class="btn btn-secondary full" type="button">
+              <i data-lucide="plus" aria-hidden="true"></i>
+              Add 2,000
+            </button>
+          </article>
+          <article class="plan-card custom-plan">
+            <span>Custom</span>
+            <strong>50+</strong>
+            <p>Minimum top-up is 50 credits.</p>
+            <label class="custom-credit-field">
+              <span>Credits amount</span>
+              <input id="custom-credits" type="number" min="50" step="1" value="50" inputmode="numeric" />
+            </label>
+            <button class="btn btn-secondary full" id="add-custom-credits" type="button">
+              <i data-lucide="plus" aria-hidden="true"></i>
+              Add Custom
+            </button>
+          </article>
+        </div>
+      </section>
+
+      <section id="setup" class="panel setup-panel" aria-labelledby="setup-title">
+        <div class="panel-heading">
+          <div>
+            <h2 id="setup-title">Configure your client</h2>
+          </div>
+          <button class="btn btn-primary compact" id="run-doctor" type="button">
+            <i data-lucide="stethoscope" aria-hidden="true"></i>
+            Run Doctor
+          </button>
+        </div>
+
+        <div class="provider-tabs" role="tablist" aria-label="Provider setup tabs">
+          <button class="provider-tab active" type="button" role="tab" aria-selected="true" data-provider="codex">
+            <i data-lucide="terminal-square" aria-hidden="true"></i>
+            Codex CLI
+          </button>
+          <button class="provider-tab" type="button" role="tab" aria-selected="false" data-provider="claude">
+            <i data-lucide="sparkles" aria-hidden="true"></i>
+            Claude Code
+          </button>
+          <button class="provider-tab" type="button" role="tab" aria-selected="false" data-provider="sdk">
+            <i data-lucide="braces" aria-hidden="true"></i>
+            OpenAI SDK
+          </button>
+          <button class="provider-tab" type="button" role="tab" aria-selected="false" data-provider="cursor">
+            <i data-lucide="panel-top" aria-hidden="true"></i>
+            Cursor / Continue
+          </button>
+          <button class="provider-tab" type="button" role="tab" aria-selected="false" data-provider="curl">
+            <i data-lucide="send" aria-hidden="true"></i>
+            cURL
+          </button>
+        </div>
+
+        <div class="setup-layout">
+          <div class="provider-content" id="provider-content" aria-live="polite"></div>
+          <aside class="doctor-card" aria-label="Doctor checks">
+            <div class="doctor-header">
+              <i data-lucide="shield-check" aria-hidden="true"></i>
+              <div>
+                <strong>Buyer Doctor</strong>
+                <span>Static prototype result</span>
+              </div>
+            </div>
+            <ul id="doctor-list" class="check-list">
+              <li><span></span>Subi service ready</li>
+              <li><span></span>API key format valid</li>
+              <li><span></span>Credits above zero</li>
+              <li><span></span>Seller node available</li>
+            </ul>
+          </aside>
+        </div>
+      </section>
+
+      <section id="usage" class="panel" aria-labelledby="usage-title">
+        <div class="panel-heading">
+          <div>
+            <h2 id="usage-title">Credit activity</h2>
+          </div>
+          <button class="btn btn-secondary compact" type="button">
+            <i data-lucide="download" aria-hidden="true"></i>
+            Export
+          </button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Request</th>
+                <th>Status</th>
+                <th>Seller</th>
+                <th>Duration</th>
+                <th>Credits</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>request_7b91</code></td>
+                <td><span class="table-status ok">Completed</span></td>
+                <td>seller-002</td>
+                <td>2.8s</td>
+                <td>-4</td>
+              </tr>
+              <tr>
+                <td><code>request_6a04</code></td>
+                <td><span class="table-status ok">Completed</span></td>
+                <td>seller-002</td>
+                <td>3.1s</td>
+                <td>-5</td>
+              </tr>
+              <tr>
+                <td><code>request_590e</code></td>
+                <td><span class="table-status refunded">Refunded</span></td>
+                <td>seller-002</td>
+                <td>timeout</td>
+                <td>0</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <div class="toast" id="toast" role="status" aria-live="polite">Copied</div>
+
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>
