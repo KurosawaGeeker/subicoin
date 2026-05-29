@@ -16,7 +16,7 @@
 
         <div class="nav-links">
           <a class="active" href="./index.html">首页</a>
-          <a href="./client.html">客户端</a>
+          <a href="./client.html">接入</a>
           <a href="./earnings.html">收益</a>
           <a href="./api.html">API</a>
         </div>
@@ -33,18 +33,31 @@
 
     <main>
       <section id="home" class="hero">
-        <div class="hero-image" aria-hidden="true"></div>
+        <canvas class="network-map" id="network-map" aria-hidden="true"></canvas>
         <div class="hero-overlay" aria-hidden="true"></div>
         <div class="hero-content">
-          <p class="kicker">P2P 编程 Token 市场</p>
-          <h1>给 coding 兄弟便宜 token 用。<br />开着电脑就能赚钱。</h1>
+          <p class="kicker">分布式 Token 共享平台</p>
+          <h1>开着电脑就能赚钱<br />充分利用闲置订阅</h1>
           <p class="hero-copy">
-            买家低价用顶级模型，卖家把本机 Codex 或 Claude 订阅挂到 Subi，按有效请求赚钱。
+            订阅状态留在你的机器，Subi 为你匹配买家，然后躺着赚钱。
           </p>
 
           <div class="hero-actions">
             <a class="primary-action" href="./client.html">开始接入</a>
             <a class="secondary-action" href="#how-it-works">了解流程</a>
+          </div>
+
+          <div class="settlement-ticker" aria-label="实时结算动态">
+            <div class="settlement-track">
+              <span><b>美国</b> 的用户 <code>sefzfdwankwdhg</code> 3 分钟前结算了 <strong>$38.40</strong></span>
+              <span><b>新加坡</b> 的用户 <code>qmxzvbnalkt</code> 5 分钟前结算了 <strong>$21.70</strong></span>
+              <span><b>日本</b> 的用户 <code>nkzfdwqplmxa</code> 8 分钟前结算了 <strong>$46.20</strong></span>
+              <span><b>韩国</b> 的用户 <code>vcrtwqaznplk</code> 11 分钟前结算了 <strong>$19.30</strong></span>
+              <span><b>德国</b> 的用户 <code>plmwdhgkqazx</code> 14 分钟前结算了 <strong>$54.10</strong></span>
+              <span><b>英国</b> 的用户 <code>zfdwankqmxvp</code> 18 分钟前结算了 <strong>$26.80</strong></span>
+              <span><b>加拿大</b> 的用户 <code>rktzplmqwvna</code> 21 分钟前结算了 <strong>$73.60</strong></span>
+              <span><b>澳大利亚</b> 的用户 <code>wdhgkqazxmpl</code> 24 分钟前结算了 <strong>$91.40</strong></span>
+            </div>
           </div>
         </div>
       </section>
@@ -153,13 +166,13 @@
     <footer class="footer">
       <span>Subi · 便宜编程 token · 开着电脑就能赚钱</span>
       <span>|</span>
-      <a href="./client.html">客户端</a>
+      <a href="./client.html">接入</a>
       <a href="./api.html">API</a>
     </footer>
 
     <nav class="mobile-nav" aria-label="移动端导航">
       <a class="active" href="./index.html">首页</a>
-      <a href="./client.html">客户端</a>
+      <a href="./client.html">接入</a>
       <a href="./earnings.html">收益</a>
       <a href="./api.html">API</a>
       <button type="button">账户</button>

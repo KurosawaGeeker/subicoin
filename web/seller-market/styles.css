@@ -155,27 +155,30 @@ a {
   overflow: hidden;
 }
 
-.hero-image,
+.network-map,
 .hero-overlay {
   position: absolute;
   inset: 0;
 }
 
-.hero-image {
-  background-image: url("https://upload.wikimedia.org/wikipedia/commons/thumb/8/8d/Claude_Monet%2C_Water_Lilies%2C_ca._1915-1926.jpg/1920px-Claude_Monet%2C_Water_Lilies%2C_ca._1915-1926.jpg");
-  background-position: center;
-  background-size: cover;
+.network-map {
+  width: 100%;
+  height: 100%;
+  background: var(--bg);
+  transform: translateY(-5vh) scale(1.03);
+  transform-origin: center top;
 }
 
 .hero-overlay {
   background:
+    radial-gradient(circle at 50% 44%, rgba(196, 149, 106, 0.14), transparent 34%),
     linear-gradient(
       180deg,
-      rgba(250, 248, 245, 0.82) 0%,
-      rgba(250, 248, 245, 0.5) 42%,
-      rgba(250, 248, 245, 0.72) 100%
+      rgba(250, 248, 245, 0.28) 0%,
+      rgba(250, 248, 245, 0.1) 42%,
+      rgba(250, 248, 245, 0.54) 100%
     );
-  backdrop-filter: blur(2px);
+  backdrop-filter: blur(0.3px);
 }
 
 .hero-content {
@@ -189,6 +192,7 @@ a {
   min-height: 100dvh;
   padding: 82px 20px 54px;
   text-align: center;
+  transform: translateY(-3.5vh);
 }
 
 .kicker {
@@ -200,9 +204,14 @@ a {
   text-transform: uppercase;
 }
 
+.hero .kicker {
+  color: rgba(138, 98, 68, 0.84);
+  font-size: 14px;
+}
+
 .hero h1 {
   margin: 0 0 20px;
-  color: var(--text);
+  color: #2c2c2c;
   font-size: 46px;
   font-weight: 300;
   line-height: 1.08;
@@ -212,15 +221,134 @@ a {
 .hero-copy {
   max-width: 520px;
   margin: 0 auto 34px;
-  color: var(--muted);
+  color: rgba(78, 72, 65, 0.86);
   font-size: 17px;
   line-height: 1.7;
+}
+
+.hero .primary-action {
+  color: #fff;
+  background: #2c2c2c;
+}
+
+.hero .secondary-action {
+  color: #2c2c2c;
+  background: rgba(255, 255, 255, 0.72);
+  border-color: rgba(44, 44, 44, 0.1);
 }
 
 .hero-actions {
   gap: 12px;
   justify-content: center;
   margin-bottom: 34px;
+}
+
+.settlement-ticker {
+  position: absolute;
+  right: 50%;
+  bottom: clamp(92px, 12vh, 132px);
+  width: min(760px, calc(100vw - 48px));
+  height: 94px;
+  overflow: hidden;
+  color: rgba(44, 44, 44, 0.72);
+  pointer-events: none;
+  transform: translateX(50%);
+  mask-image: linear-gradient(180deg, transparent, #000 18%, #000 74%, transparent);
+}
+
+.settlement-track {
+  position: relative;
+  height: 100%;
+}
+
+.settlement-track span {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 34px;
+  padding: 0 14px;
+  white-space: nowrap;
+  opacity: 0;
+  background: rgba(255, 255, 255, 0.64);
+  border: 1px solid rgba(138, 98, 68, 0.1);
+  border-radius: 999px;
+  box-shadow: 0 14px 34px rgba(138, 98, 68, 0.1);
+  backdrop-filter: blur(16px);
+  font-size: 12px;
+  font-weight: 560;
+  transform: translate(-50%, 18px) scale(0.98);
+  animation: settlement-rise 16s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+.settlement-track span:nth-child(2) {
+  animation-delay: 2s;
+}
+
+.settlement-track span:nth-child(3) {
+  animation-delay: 4s;
+}
+
+.settlement-track span:nth-child(4) {
+  animation-delay: 6s;
+}
+
+.settlement-track span:nth-child(5) {
+  animation-delay: 8s;
+}
+
+.settlement-track span:nth-child(6) {
+  animation-delay: 10s;
+}
+
+.settlement-track span:nth-child(7) {
+  animation-delay: 12s;
+}
+
+.settlement-track span:nth-child(8) {
+  animation-delay: 14s;
+}
+
+.settlement-track b {
+  color: rgba(138, 98, 68, 0.88);
+  font-weight: 700;
+}
+
+.settlement-track code {
+  color: rgba(44, 44, 44, 0.62);
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.settlement-track strong {
+  color: #2c2c2c;
+  font-weight: 700;
+}
+
+@keyframes settlement-rise {
+  0%,
+  6% {
+    opacity: 0;
+    transform: translate(-50%, 18px) scale(0.98);
+  }
+
+  10%,
+  16% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+
+  22% {
+    opacity: 0;
+    transform: translate(-50%, -38px) scale(0.985);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50px) scale(0.985);
+  }
 }
 
 .primary-action,
@@ -656,23 +784,6 @@ a {
   line-height: 1.7;
 }
 
-.client-photo {
-  width: 100%;
-  margin: 0 0 28px;
-  overflow: hidden;
-  background: var(--surface-solid);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: var(--shadow);
-}
-
-.client-photo img {
-  display: block;
-  width: 100%;
-  aspect-ratio: 16 / 7;
-  object-fit: cover;
-}
-
 .download-row,
 .earnings-grid,
 .api-grid {
@@ -959,16 +1070,6 @@ td code {
     color-scheme: dark;
   }
 
-  .hero-overlay {
-    background:
-      linear-gradient(
-        180deg,
-        rgba(24, 22, 20, 0.78) 0%,
-        rgba(24, 22, 20, 0.45) 42%,
-        rgba(24, 22, 20, 0.74) 100%
-      );
-  }
-
   .secondary-action,
   .language-toggle button.active,
   .client-tabs button.active,
@@ -1070,11 +1171,21 @@ td code {
   .hero-actions {
     width: 100%;
     flex-direction: column;
+    margin-bottom: 20px;
   }
 
   .primary-action,
   .secondary-action {
     width: 100%;
+  }
+
+  .settlement-ticker {
+    position: relative;
+    right: auto;
+    bottom: auto;
+    width: 100%;
+    height: 86px;
+    transform: none;
   }
 
   .section {
