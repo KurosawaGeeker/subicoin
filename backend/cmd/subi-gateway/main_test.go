@@ -6,12 +6,14 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/Wei-Shaw/sub2api/internal/store"
 
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/require"
@@ -122,6 +124,110 @@ func TestGatewayNoSellerReturnsReadableError(t *testing.T) {
 	require.Equal(t, "application/json", strings.Split(resp.Header.Get("Content-Type"), ";")[0])
 }
 
+func TestGatewayWebSellerSetupAndDBBackedBuyerKey(t *testing.T) {
+	service.DefaultSubiSellerNodeRegistry = service.NewSubiSellerNodeRegistry()
+	accountStore, err := store.Open(filepath.Join(t.TempDir(), "subi.db"))
+	require.NoError(t, err)
+	defer accountStore.Close()
+
+	cfg := gatewayConfig{
+		Store:             accountStore,
+		SessionCookieName: "subi_session",
+		SessionStore:      service.NewSubiSessionStore(20, 20000),
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/web/auth/", func(w http.ResponseWriter, r *http.Request) {
+		handleWebAuth(w, r, cfg)
+	})
+	mux.HandleFunc("/api/web/buyer/", func(w http.ResponseWriter, r *http.Request) {
+		handleWebBuyer(w, r, cfg)
+	})
+	mux.HandleFunc("/api/web/seller/", func(w http.ResponseWriter, r *http.Request) {
+		handleWebSeller(w, r, cfg)
+	})
+	mux.HandleFunc("/api/v1/subi/seller/setup", func(w http.ResponseWriter, r *http.Request) {
+		handleSellerSetup(w, r, cfg)
+	})
+	mux.HandleFunc("/api/v1/subi/seller/agent/ws", func(w http.ResponseWriter, r *http.Request) {
+		handleSellerAgentWS(w, r, cfg)
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		handleBuyerRequest(w, r, cfg)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	registerResp := postJSON(t, server.URL+"/api/web/auth/register", "", map[string]any{
+		"email":    "seller@example.com",
+		"password": "password123",
+	}, http.StatusCreated)
+	require.NotEmpty(t, registerResp.Cookies())
+	cookie := registerResp.Cookies()[0]
+
+	nodeResp := postJSON(t, server.URL+"/api/web/seller/nodes", cookie.String(), map[string]any{
+		"node_id":         "seller-macbook-001",
+		"max_concurrency": 1,
+	}, http.StatusCreated)
+	require.Equal(t, "seller-macbook-001", gjson.Get(nodeResp.Body, "node.node_id").String())
+
+	setupResp := postJSON(t, server.URL+"/api/web/seller/nodes/seller-macbook-001/setup-token", cookie.String(), map[string]any{}, http.StatusCreated)
+	setupToken := gjson.Get(setupResp.Body, "setup_token").String()
+	require.NotEmpty(t, setupToken)
+
+	resp, err := http.Get(server.URL + "/api/v1/subi/seller/setup?token=" + setupToken)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	setupBody, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, resp.StatusCode, string(setupBody))
+	nodeToken := gjson.GetBytes(setupBody, "subi_seller_node_token").String()
+	nodeID := gjson.GetBytes(setupBody, "subi_node_id").String()
+	require.Equal(t, "seller-macbook-001", nodeID)
+	require.NotEmpty(t, nodeToken)
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/api/v1/subi/seller/agent/ws"
+	header := http.Header{}
+	header.Set("Authorization", "Bearer "+nodeToken)
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, header)
+	require.NoError(t, err)
+	defer conn.Close()
+	require.NoError(t, conn.WriteJSON(service.SubiEnvelope{
+		Type:           service.SubiEnvelopeAgentHello,
+		NodeID:         nodeID,
+		Version:        "test",
+		MaxConcurrency: 1,
+	}))
+	seller := &gatewayTestSeller{
+		nodeID:    nodeID,
+		conn:      conn,
+		responses: []string{"DB_KEY_OK"},
+		requests:  make(chan service.SubiEnvelope, 8),
+	}
+	go seller.serve()
+	time.Sleep(50 * time.Millisecond)
+
+	keysResp := postJSON(t, server.URL+"/api/web/buyer/api-keys", cookie.String(), map[string]any{
+		"name": "Codex",
+	}, http.StatusCreated)
+	buyerSecret := gjson.Get(keysResp.Body, "secret").String()
+	require.NotEmpty(t, buyerSecret)
+
+	reqBody, err := json.Marshal(map[string]any{"model": "subi-codex-subscription", "stream": false, "input": "hi"})
+	require.NoError(t, err)
+	req, err := http.NewRequest(http.MethodPost, server.URL+"/v1/responses", bytes.NewReader(reqBody))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", "Bearer "+buyerSecret)
+	req.Header.Set("Content-Type", "application/json")
+	buyerResp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer buyerResp.Body.Close()
+	buyerBody, err := io.ReadAll(buyerResp.Body)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, buyerResp.StatusCode, string(buyerBody))
+	require.Contains(t, string(buyerBody), "DB_KEY_OK")
+	_ = seller.nextRequest(t)
+}
+
 type gatewayTestHarness struct {
 	t      *testing.T
 	server *httptest.Server
@@ -131,6 +237,33 @@ type gatewayTestResponse struct {
 	StatusCode int
 	Header     http.Header
 	Body       string
+}
+
+func postJSON(t *testing.T, targetURL, cookie string, payload any, expectedStatus int) gatewayTestResponse {
+	t.Helper()
+	body, err := json.Marshal(payload)
+	require.NoError(t, err)
+	req, err := http.NewRequest(http.MethodPost, targetURL, bytes.NewReader(body))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+	if cookie != "" {
+		req.Header.Set("Cookie", cookie)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	respBody, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Equal(t, expectedStatus, resp.StatusCode, string(respBody))
+	return gatewayTestResponse{
+		StatusCode: resp.StatusCode,
+		Header:     resp.Header.Clone(),
+		Body:       string(respBody),
+	}
+}
+
+func (r gatewayTestResponse) Cookies() []*http.Cookie {
+	return (&http.Response{Header: r.Header}).Cookies()
 }
 
 func newGatewayTestHarness(t *testing.T, sessionContextEnabled bool) *gatewayTestHarness {

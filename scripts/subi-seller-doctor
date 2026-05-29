@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+CONFIG_FILE="${SUBI_SELLER_CONFIG_FILE:-$HOME/.subi/seller/config.env}"
+EXPECTED="${SUBI_SELLER_DOCTOR_EXPECTED:-SUBI_SELLER_DOCTOR_OK}"
+PROMPT="${SUBI_SELLER_DOCTOR_PROMPT:-Reply exactly: $EXPECTED}"
+
+fail() {
+  printf 'fail: %s\n' "$*" >&2
+  exit 1
+}
+
+pass() {
+  printf 'ok: %s\n' "$*"
+}
+
+mask_secret() {
+  local value="$1"
+  local len=${#value}
+  if (( len <= 8 )); then
+    printf '<set:%s chars>' "$len"
+    return
+  fi
+  printf '%s...%s' "${value:0:4}" "${value: -4}"
+}
+
+[[ -f "$CONFIG_FILE" ]] || fail "seller config not found: $CONFIG_FILE"
+
+set -a
+source "$CONFIG_FILE"
+set +a
+
+[[ -n "${SUBI_GATEWAY_WS_URL:-}" ]] || fail "SUBI_GATEWAY_WS_URL is not set"
+[[ -n "${SUBI_SELLER_NODE_TOKEN:-}" ]] || fail "SUBI_SELLER_NODE_TOKEN is not set"
+[[ -n "${SUBI_NODE_ID:-}" ]] || fail "SUBI_NODE_ID is not set"
+[[ -n "${SELLER_UPSTREAM_MODE:-}" ]] || fail "SELLER_UPSTREAM_MODE is not set"
+
+pass "node_id=$SUBI_NODE_ID"
+pass "gateway_ws=$SUBI_GATEWAY_WS_URL"
+pass "node_token=$(mask_secret "$SUBI_SELLER_NODE_TOKEN")"
+pass "upstream_mode=$SELLER_UPSTREAM_MODE"
+
+if [[ "${SELLER_UPSTREAM_MODE}" == "codex-app-server" || "${SELLER_UPSTREAM_MODE}" == "codex-exec" ]]; then
+  CODEX_BIN="${SELLER_CODEX_BIN:-codex}"
+  command -v "$CODEX_BIN" >/dev/null 2>&1 || fail "codex binary not found: $CODEX_BIN"
+  pass "codex binary=$("$CODEX_BIN" --version 2>/dev/null | head -n 1 || printf '%s' "$CODEX_BIN")"
+
+  if "$CODEX_BIN" login status >/tmp/subi-seller-doctor-login.txt 2>&1; then
+    pass "codex login status ok"
+  else
+    cat /tmp/subi-seller-doctor-login.txt >&2 || true
+    fail "codex is not logged in; run: codex login --device-auth"
+  fi
+
+  if [[ "${SUBI_SELLER_DOCTOR_SKIP_CODEX_PROBE:-}" != "1" ]]; then
+    probe_out="$(printf '' | "$CODEX_BIN" exec --json --skip-git-repo-check --sandbox "${SELLER_CODEX_SANDBOX:-read-only}" "$PROMPT" 2>&1 || true)"
+    if [[ "$probe_out" != *"$EXPECTED"* ]]; then
+      printf '%s\n' "$probe_out" >&2
+      fail "codex subscription probe did not return $EXPECTED"
+    fi
+    pass "codex subscription probe returned $EXPECTED"
+  fi
+fi
+
+pass "seller environment is ready"

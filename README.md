@@ -1,5 +1,7 @@
 # Subi P2P Gateway Prototype
 
+中文说明见 [README_CN.md](./README_CN.md)。
+
 Subi is a P2P top-tier model-access marketplace — essentially a matching
 exchange. Buyers pay with crypto and use sellers' local Claude / Codex
 subscriptions indirectly through their own coding agent; sellers keep a client
@@ -147,6 +149,32 @@ export SUBI_BUYER_API_KEY="<subi buyer key>"
 export SUBI_SELLER_NODE_TOKEN="<seller node token>"
 ```
 
+For the account-backed onboarding flow, enable SQLite storage instead of the
+single static key model:
+
+```bash
+export SUBI_DB_PATH="/opt/subi/subi.db"
+export SUBI_PUBLIC_GATEWAY_WS_URL="wss://<gateway-host>/api/v1/subi/seller/agent/ws"
+```
+
+When `SUBI_DB_PATH` is set, the Gateway exposes minimal Web APIs for:
+
+```text
+POST /api/web/auth/register
+POST /api/web/auth/login
+GET  /api/web/auth/me
+POST /api/web/buyer/api-keys
+GET  /api/web/seller/nodes
+POST /api/web/seller/nodes
+POST /api/web/seller/nodes/:node_id/setup-token
+GET  /api/v1/subi/seller/setup?token=...
+GET  /api/v1/subi/seller/install.sh
+```
+
+Set `SUBI_DEV_STATIC_KEYS=true` only when you need to keep the old
+`SUBI_BUYER_API_KEY` / `SUBI_SELLER_NODE_TOKEN` experiment keys working while
+the database-backed account system is enabled.
+
 Optional session context:
 
 ```bash
@@ -183,6 +211,26 @@ Run:
 
 ```bash
 ./dist/seller-agent
+```
+
+With account-backed onboarding, sellers should not hand-copy these variables.
+The seller dashboard creates a setup token and shows a one-command installer:
+
+```bash
+curl -fsSL https://<gateway-host>/api/v1/subi/seller/install.sh | bash -s -- \
+  --gateway https://<gateway-host> \
+  --setup-token <subi_setup_xxx> \
+  --agent-path ./dist/seller-agent-darwin-arm64
+```
+
+The installer exchanges the setup token once, writes
+`~/.subi/seller/config.env`, installs `seller-agent`, and starts it with
+launchd on macOS or `systemd --user` on Linux.
+
+Run the seller doctor after installation:
+
+```bash
+./scripts/subi-seller-doctor
 ```
 
 `SELLER_CODEX_WORKERS` controls the seller-side worker pool size and is reported

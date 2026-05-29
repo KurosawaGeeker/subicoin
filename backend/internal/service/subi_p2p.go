@@ -97,6 +97,13 @@ type SubiSellerNodeRegistry struct {
 	requests map[string]*subiP2PRequestState
 }
 
+type SubiSellerNodeHooks struct {
+	AuthNode           func(ctx context.Context, nodeID string) error
+	OnNodeRegistered   func(ctx context.Context, nodeID string)
+	OnNodeHeartbeat    func(ctx context.Context, nodeID string)
+	OnNodeDisconnected func(ctx context.Context, nodeID string)
+}
+
 type subiSellerNode struct {
 	id             string
 	version        string
@@ -145,6 +152,10 @@ func SubiSellerNodeToken() string {
 }
 
 func (r *SubiSellerNodeRegistry) ServeAgent(ctx context.Context, conn *websocket.Conn) error {
+	return r.ServeAgentWithHooks(ctx, conn, SubiSellerNodeHooks{})
+}
+
+func (r *SubiSellerNodeRegistry) ServeAgentWithHooks(ctx context.Context, conn *websocket.Conn, hooks SubiSellerNodeHooks) error {
 	var hello SubiEnvelope
 	if err := conn.SetReadDeadline(time.Now().Add(10 * time.Second)); err != nil {
 		return err
@@ -162,6 +173,11 @@ func (r *SubiSellerNodeRegistry) ServeAgent(ctx context.Context, conn *websocket
 	if nodeID == "" {
 		return errors.New("seller agent node_id is required")
 	}
+	if hooks.AuthNode != nil {
+		if err := hooks.AuthNode(ctx, nodeID); err != nil {
+			return fmt.Errorf("seller agent auth failed: %w", err)
+		}
+	}
 	maxConcurrency := hello.MaxConcurrency
 	if maxConcurrency <= 0 {
 		maxConcurrency = 1
@@ -176,7 +192,15 @@ func (r *SubiSellerNodeRegistry) ServeAgent(ctx context.Context, conn *websocket
 	}
 
 	r.registerNode(node)
-	defer r.unregisterNode(nodeID)
+	if hooks.OnNodeRegistered != nil {
+		hooks.OnNodeRegistered(ctx, nodeID)
+	}
+	defer func() {
+		r.unregisterNode(nodeID)
+		if hooks.OnNodeDisconnected != nil {
+			hooks.OnNodeDisconnected(context.Background(), nodeID)
+		}
+	}()
 
 	for {
 		select {
@@ -192,6 +216,9 @@ func (r *SubiSellerNodeRegistry) ServeAgent(ctx context.Context, conn *websocket
 		switch env.Type {
 		case SubiEnvelopeHeartbeat:
 			r.touchNode(nodeID)
+			if hooks.OnNodeHeartbeat != nil {
+				hooks.OnNodeHeartbeat(ctx, nodeID)
+			}
 		case SubiEnvelopeResponseStart, SubiEnvelopeResponseChunk, SubiEnvelopeResponseEnd, SubiEnvelopeResponseError:
 			r.deliverAgentEvent(nodeID, env)
 		default:
