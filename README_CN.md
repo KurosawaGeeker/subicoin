@@ -201,7 +201,7 @@ export SUBI_RESERVE_MICROS=50000
 账号模式下，卖家不应该手动复制一堆环境变量。流程应该是：
 
 ```text
-注册 / 登录
+登录；新用户自动创建账号
 -> 创建 seller node
 -> 生成 setup token
 -> 复制安装命令

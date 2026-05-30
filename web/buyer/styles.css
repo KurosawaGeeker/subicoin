@@ -819,6 +819,7 @@ body.auth-lock {
 
 .auth-heading h2 {
   font-size: 24px;
+  font-weight: 500;
   line-height: 1.15;
 }
 
@@ -829,18 +830,6 @@ body.auth-lock {
   line-height: 1.45;
 }
 
-.auth-tabs {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 4px;
-  margin-top: 20px;
-  padding: 4px;
-  background: #f9fafb;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-}
-
-.auth-tabs button,
 .auth-provider {
   min-height: 40px;
   color: var(--muted);
@@ -850,17 +839,11 @@ body.auth-lock {
   font-weight: 500;
 }
 
-.auth-tabs button.active {
-  color: var(--text);
-  background: #fff;
-  box-shadow: 0 1px 6px rgba(17, 24, 39, 0.08);
-}
-
 .auth-provider-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
-  margin-top: 16px;
+  margin-top: 20px;
 }
 
 .auth-provider {
@@ -886,6 +869,12 @@ body.auth-lock {
   background: var(--primary);
   border-radius: 6px;
   font-size: 12px;
+}
+
+.auth-provider img {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
 }
 
 .auth-provider-wide {

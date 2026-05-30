@@ -134,7 +134,9 @@ detect_binaries() {
       ;;
   esac
 
-  if [[ ! -x "$gateway" || ! -x "$agent" ]]; then
+  if [[ ! -x "$gateway" || ! -x "$agent" ]] ||
+    find "$ROOT/backend" -type f \( -name '*.go' -o -name 'go.mod' -o -name 'go.sum' \) -newer "$gateway" -print -quit | grep -q . ||
+    find "$ROOT/backend" -type f \( -name '*.go' -o -name 'go.mod' -o -name 'go.sum' \) -newer "$agent" -print -quit | grep -q .; then
     info "building local binaries with: make $target"
     make -C "$ROOT" "$target" >&2
   fi

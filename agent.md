@@ -98,9 +98,10 @@ Email: subi-local-demo@subi.local
 Password: password123
 ```
 
-If the local DB is fresh, create it once from the Register tab in either the
-Buyer or Seller sign-in modal. The same account can access both consoles because
-current MVP Web auth uses one shared user table.
+If the local DB is fresh, enter this email and password in either the Buyer or
+Seller sign-in modal. The Web app will create the account automatically when it
+does not exist. The same account can access both consoles because current MVP
+Web auth uses one shared user table.
 
 To write this account into a running local Gateway DB:
 

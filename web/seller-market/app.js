@@ -6,7 +6,6 @@ const sellerState = {
   activeProvider: "codex",
   earnings: null,
   activity: [],
-  authMode: "login",
   refreshing: false,
 };
 
@@ -187,20 +186,16 @@ function ensureAuthModal() {
             <span class="brand-mark">S</span>
             <div>
               <h2 id="auth-modal-title">登录 Subi</h2>
-              <p id="auth-modal-copy">管理卖家节点、安装命令和收益流水。</p>
+              <p id="auth-modal-copy">输入邮箱和密码。新用户会自动创建账号。</p>
             </div>
-          </div>
-          <div class="auth-tabs" role="tablist" aria-label="登录模式">
-            <button class="active" type="button" role="tab" aria-selected="true" data-auth-mode="login">登录</button>
-            <button type="button" role="tab" aria-selected="false" data-auth-mode="register">注册</button>
           </div>
           <div class="auth-provider-grid">
             <button class="auth-provider" type="button" data-auth-disabled>
-              <span>G</span>
+              <img src="./auth-google.svg" alt="" />
               Google
             </button>
             <button class="auth-provider" type="button" data-auth-disabled>
-              <span>A</span>
+              <img src="./auth-apple.svg" alt="" />
               Apple
             </button>
           </div>
@@ -228,29 +223,8 @@ function ensureAuthModal() {
   document.querySelector("#auth-form")?.addEventListener("submit", handleAuthSubmit);
 }
 
-function setAuthMode(mode) {
-  sellerState.authMode = mode === "register" ? "register" : "login";
-  document.querySelectorAll("[data-auth-mode]").forEach((button) => {
-    const active = button.dataset.authMode === sellerState.authMode;
-    button.classList.toggle("active", active);
-    button.setAttribute("aria-selected", String(active));
-  });
-  setText("#auth-modal-title", sellerState.authMode === "register" ? "创建 Subi 账号" : "登录 Subi");
-  setText(
-    "#auth-modal-copy",
-    sellerState.authMode === "register" ? "使用邮箱和密码创建买家/卖家通用账号。" : "管理卖家节点、安装命令和收益流水。",
-  );
-  setText("#auth-submit", sellerState.authMode === "register" ? "创建账号" : "登录");
-  setText("#auth-error", "");
-  const passwordInput = document.querySelector("#auth-password");
-  if (passwordInput) {
-    passwordInput.autocomplete = sellerState.authMode === "register" ? "new-password" : "current-password";
-  }
-}
-
-function openAuthModal(mode = "login") {
+function openAuthModal() {
   ensureAuthModal();
-  setAuthMode(mode);
   const modal = document.querySelector("#auth-modal");
   if (!modal) {
     return;
@@ -288,12 +262,6 @@ document.addEventListener("click", (event) => {
   const authClose = event.target.closest("[data-auth-close]");
   if (authClose) {
     closeAuthModal();
-    return;
-  }
-
-  const authModeButton = event.target.closest("[data-auth-mode]");
-  if (authModeButton) {
-    setAuthMode(authModeButton.dataset.authMode);
     return;
   }
 
@@ -527,21 +495,12 @@ async function handleAuthSubmit(event) {
     submitButton.disabled = true;
   }
   try {
-    await api(sellerState.authMode === "register" ? "/api/web/auth/register" : "/api/web/auth/login", {
-      method: "POST",
-      body: { email, password },
-    });
+    await signInOrCreateAccount(email, password);
     closeAuthModal();
-    showToast(sellerState.authMode === "register" ? "账号已创建" : "已登录");
+    showToast("已登录");
     await loadSellerAccount();
   } catch (error) {
-    if (sellerState.authMode === "login" && error.status === 401) {
-      setText("#auth-error", "邮箱或密码不正确。");
-    } else if (sellerState.authMode === "register" && error.status === 409) {
-      setText("#auth-error", "账号已存在，请切换到登录。");
-    } else {
-      setText("#auth-error", error.message);
-    }
+    setText("#auth-error", error.message);
   } finally {
     if (submitButton) {
       submitButton.disabled = false;
@@ -549,8 +508,34 @@ async function handleAuthSubmit(event) {
   }
 }
 
-async function loginOrRegister(mode = "login") {
-  openAuthModal(mode);
+async function signInOrCreateAccount(email, password) {
+  try {
+    await api("/api/web/auth/login", {
+      method: "POST",
+      body: { email, password },
+    });
+    return;
+  } catch (error) {
+    if (error.status !== 401) {
+      throw error;
+    }
+  }
+
+  try {
+    await api("/api/web/auth/register", {
+      method: "POST",
+      body: { email, password },
+    });
+  } catch (error) {
+    if (error.status === 409) {
+      throw new Error("邮箱或密码不正确。");
+    }
+    throw error;
+  }
+}
+
+async function loginOrRegister() {
+  openAuthModal();
 }
 
 async function logout() {
