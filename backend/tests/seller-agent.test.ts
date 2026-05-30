@@ -1,59 +1,198 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { chmod, mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { CodexAppServerUpstream, handleRequest, type AgentConfig } from "../src/seller-agent";
-import { decodeEnvelope, subiEnvelopeResponseChunk, subiEnvelopeResponseEnd, subiEnvelopeResponseStart, type JSONSocket, type SubiEnvelope } from "../src/service/p2p";
+import { handleRequest, runSellerAgentUntilClosed, validateAgentConfig, type AgentConfig } from "../src/seller-agent";
+import { decodeEnvelope, subiEnvelopeResponseChunk, subiEnvelopeResponseStart, type JSONSocket, type SubiEnvelope } from "../src/service/p2p";
+import { delay } from "../src/utils";
 
 const cleanupPaths: string[] = [];
-const upstreams: CodexAppServerUpstream[] = [];
+const servers: Bun.Server<any>[] = [];
 
 afterEach(async () => {
-  for (const upstream of upstreams.splice(0)) await upstream.close();
+  for (const server of servers.splice(0)) server.stop(true);
   for (const path of cleanupPaths.splice(0)) await rm(path, { recursive: true, force: true });
 });
 
-describe("seller-agent codex app-server upstream", () => {
-  test("uses persistent app-server JSON-RPC instead of per-request codex exec", async () => {
-    const dir = await mkdtemp(`${tmpdir()}/subi-fake-codex-`);
-    cleanupPaths.push(dir);
-    const fakeCodex = `${dir}/fake-codex`;
-    await Bun.write(fakeCodex, fakeCodexAppServerSource());
-    await chmod(fakeCodex, 0o700);
-
-    const cfg: AgentConfig = {
-      gateway_ws_url: "ws://127.0.0.1:1/api/v1/subi/seller/agent/ws",
-      node_token: "seller-token",
-      node_id: "seller-app-server-test",
-      upstream_mode: "codex-app-server",
-      worker_count: 1,
-      worker_queue_len: 1,
-      local_base_url: "",
-      local_api_key: "",
-      codex_bin: fakeCodex,
-      codex_model: "fake-model",
-      codex_workdir: dir,
-      codex_sandbox: "read-only",
-      codex_extra_args: [],
-      app_server_bin: fakeCodex,
-      app_server_host: "127.0.0.1",
-      app_server_port_base: 19700,
-      app_server_startup_timeout_ms: 5000,
-      app_server_sticky_threads: true,
-    };
-    const upstream = new CodexAppServerUpstream(cfg, 1);
-    upstreams.push(upstream);
-    await upstream.ensure();
-
+describe("seller-agent codex-login upstream", () => {
+  test("rejects legacy local execution upstreams by default", async () => {
+    expect(() => validateAgentConfig(agentConfig({ upstream_mode: "codex-app-server" }))).toThrow("must be codex-login");
     const socket = new CollectingSocket();
-    await handleRequest(cfg, socket, requestEnvelope("req-1", "hello app-server"), upstream);
+    await handleRequest(agentConfig({ upstream_mode: "codex-exec" }), socket, requestEnvelope("req-unsafe", "do not run locally"));
+    const error = socket.sent.find((sent) => sent.type === "response_error");
+    expect(error?.error).toContain("unsupported seller upstream mode");
+  });
 
-    const start = socket.sent.find((env) => env.type === subiEnvelopeResponseStart);
-    expect(start?.status_code).toBe(200);
-    expect(start?.headers?.["X-Subi-Upstream-Mode"]).toEqual(["codex-app-server"]);
-    const chunk = socket.sent.find((env) => env.type === subiEnvelopeResponseChunk);
-    const body = JSON.parse(new TextDecoder().decode(chunk?.data));
-    expect(body.output_text).toBe("APP_SERVER_OK: hello app-server");
-    expect(socket.sent.some((env) => env.type === subiEnvelopeResponseEnd)).toBe(true);
+  test("stops cleanly when aborted", async () => {
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch(req, server) {
+        if (server.upgrade(req)) return undefined;
+        return new Response("not found", { status: 404 });
+      },
+      websocket: {
+        message() {},
+      },
+    });
+    servers.push(server);
+    const controller = new AbortController();
+    const done = runSellerAgentUntilClosed(
+      agentConfig({
+        gateway_ws_url: server.url.toString().replace(/^http/, "ws"),
+        upstream_mode: "codex-login",
+      }),
+      controller.signal,
+    );
+
+    await delay(50);
+    controller.abort();
+
+    await Promise.race([
+      done,
+      delay(1000).then(() => {
+        throw new Error("seller-agent did not stop after abort");
+      }),
+    ]);
+  });
+
+  test("proxies Responses requests with Codex ChatGPT auth and no local Codex runtime", async () => {
+    const dir = await mkdtemp(`${tmpdir()}/subi-codex-home-`);
+    cleanupPaths.push(dir);
+    const accessToken = fakeJWT({ exp: Math.floor(Date.now() / 1000) + 3600 });
+    await writeAuth(dir, accessToken, "refresh-token", "account-123");
+    let upstreamPath = "";
+    let upstreamBody = "";
+    let upstreamHeaders: Record<string, string> = {};
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      async fetch(req) {
+        const url = new URL(req.url);
+        upstreamPath = `${url.pathname}${url.search}`;
+        upstreamBody = await req.text();
+        upstreamHeaders = Object.fromEntries(req.headers.entries());
+        return new Response(JSON.stringify({ output_text: "LOGIN_PROXY_OK" }), { headers: { "Content-Type": "application/json" } });
+      },
+    });
+    servers.push(server);
+
+    const cfg = agentConfig({
+      upstream_mode: "codex-login",
+      codex_home: dir,
+      codex_base_url: `${server.url.toString().replace(/\/$/, "")}/backend-api/codex`,
+    });
+    const socket = new CollectingSocket();
+    const env = requestEnvelope("req-login", "hello login");
+    env.path = "/v1/responses?trace=1";
+    env.headers = {
+      Authorization: ["Bearer buyer-key"],
+      "X-Api-Key": ["buyer-key"],
+      "OpenAI-Organization": ["buyer-org"],
+      "Content-Type": ["application/json"],
+    };
+
+    await handleRequest(cfg, socket, env);
+
+    expect(upstreamPath).toBe("/backend-api/codex/responses?trace=1");
+    expect(upstreamBody).toBe(new TextDecoder().decode(env.body));
+    expect(upstreamHeaders.authorization).toBe(`Bearer ${accessToken}`);
+    expect(upstreamHeaders["chatgpt-account-id"]).toBe("account-123");
+    expect(upstreamHeaders["x-api-key"]).toBeUndefined();
+    expect(upstreamHeaders["openai-organization"]).toBeUndefined();
+    expect(upstreamHeaders["user-agent"]).toContain("subi-seller-agent");
+    const start = socket.sent.find((sent) => sent.type === subiEnvelopeResponseStart);
+    expect(start?.headers?.["X-Subi-Upstream-Mode"]).toEqual(["codex-login"]);
+    const chunk = socket.sent.find((sent) => sent.type === subiEnvelopeResponseChunk);
+    expect(new TextDecoder().decode(chunk?.data)).toContain("LOGIN_PROXY_OK");
+  });
+
+  test("strips gateway metadata before forwarding to Codex backend", async () => {
+    const dir = await mkdtemp(`${tmpdir()}/subi-codex-home-`);
+    cleanupPaths.push(dir);
+    await writeAuth(dir, fakeJWT({ exp: Math.floor(Date.now() / 1000) + 3600 }), "refresh-token", "account-123");
+    let upstreamBody: any;
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      async fetch(req) {
+        upstreamBody = await req.json();
+        return new Response(JSON.stringify({ output_text: "METADATA_STRIPPED_OK" }), { headers: { "Content-Type": "application/json" } });
+      },
+    });
+    servers.push(server);
+
+    const cfg = agentConfig({
+      codex_home: dir,
+      codex_base_url: `${server.url.toString().replace(/\/$/, "")}/backend-api/codex`,
+    });
+    const socket = new CollectingSocket();
+    const env = requestEnvelope("req-metadata", "hello metadata");
+    env.body = new TextEncoder().encode(
+      JSON.stringify({
+        model: "gpt-5.5",
+        input: "hello metadata",
+        stream: true,
+        metadata: { subi_context_injected: true, session_id: "internal-session" },
+      }),
+    );
+
+    await handleRequest(cfg, socket, env);
+
+    expect(upstreamBody.metadata).toBeUndefined();
+    expect(upstreamBody.input).toBe("hello metadata");
+    const chunk = socket.sent.find((sent) => sent.type === subiEnvelopeResponseChunk);
+    expect(new TextDecoder().decode(chunk?.data)).toContain("METADATA_STRIPPED_OK");
+  });
+
+  test("refreshes Codex ChatGPT tokens and retries unauthorized requests", async () => {
+    const dir = await mkdtemp(`${tmpdir()}/subi-codex-home-`);
+    cleanupPaths.push(dir);
+    const staleToken = fakeJWT({ exp: Math.floor(Date.now() / 1000) + 3600, token: "stale" });
+    const refreshedToken = fakeJWT({ exp: Math.floor(Date.now() / 1000) + 3600, token: "refreshed" });
+    await writeAuth(dir, staleToken, "refresh-old", "account-refresh");
+    let refreshRequest: any;
+    let responseCalls = 0;
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      async fetch(req) {
+        const url = new URL(req.url);
+        if (url.pathname === "/oauth/token") {
+          refreshRequest = await req.json();
+          return new Response(
+            JSON.stringify({
+              access_token: refreshedToken,
+              refresh_token: "refresh-new",
+              id_token: fakeIDToken("account-refresh"),
+            }),
+            { headers: { "Content-Type": "application/json" } },
+          );
+        }
+        responseCalls++;
+        if (req.headers.get("authorization") !== `Bearer ${refreshedToken}`) {
+          return new Response(JSON.stringify({ error: { message: "expired" } }), { status: 401, headers: { "Content-Type": "application/json" } });
+        }
+        return new Response(JSON.stringify({ output_text: "REFRESHED_OK" }), { headers: { "Content-Type": "application/json" } });
+      },
+    });
+    servers.push(server);
+
+    const cfg = agentConfig({
+      upstream_mode: "codex-login",
+      codex_home: dir,
+      codex_base_url: `${server.url.toString().replace(/\/$/, "")}/backend-api/codex`,
+      codex_refresh_url: `${server.url.toString().replace(/\/$/, "")}/oauth/token`,
+    });
+    const socket = new CollectingSocket();
+    await handleRequest(cfg, socket, requestEnvelope("req-refresh", "hello refresh"));
+
+    expect(refreshRequest).toMatchObject({ client_id: "app_EMoamEEZ73f0CkXaXp7hrann", grant_type: "refresh_token", refresh_token: "refresh-old" });
+    expect(responseCalls).toBe(2);
+    const auth = JSON.parse(await Bun.file(`${dir}/auth.json`).text());
+    expect(auth.tokens.access_token).toBe(refreshedToken);
+    expect(auth.tokens.refresh_token).toBe("refresh-new");
+    const chunk = socket.sent.find((sent) => sent.type === subiEnvelopeResponseChunk);
+    expect(new TextDecoder().decode(chunk?.data)).toContain("REFRESHED_OK");
   });
 });
 
@@ -63,6 +202,21 @@ class CollectingSocket implements JSONSocket {
     this.sent.push(decodeEnvelope(data));
   }
   close(): void {}
+}
+
+function agentConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
+  return {
+    gateway_ws_url: "ws://127.0.0.1:1/api/v1/subi/seller/agent/ws",
+    node_token: "seller-token",
+    node_id: "seller-test",
+    upstream_mode: "codex-login",
+    worker_count: 1,
+    worker_queue_len: 1,
+    codex_home: `${tmpdir()}/missing-codex-home`,
+    codex_base_url: "https://chatgpt.com/backend-api/codex",
+    codex_refresh_url: "https://auth.openai.com/oauth/token",
+    ...overrides,
+  };
 }
 
 function requestEnvelope(requestID: string, input: string): SubiEnvelope {
@@ -79,49 +233,39 @@ function requestEnvelope(requestID: string, input: string): SubiEnvelope {
   };
 }
 
-function fakeCodexAppServerSource(): string {
-  return `#!/usr/bin/env bun
-const args = Bun.argv.slice(2);
-if (args[0] !== "app-server") {
-  console.error("fake codex only supports app-server");
-  process.exit(2);
+async function writeAuth(dir: string, accessToken: string, refreshToken: string, accountID: string): Promise<void> {
+  await Bun.write(
+    `${dir}/auth.json`,
+    JSON.stringify(
+      {
+        auth_mode: "chatgpt",
+        last_refresh: new Date().toISOString(),
+        tokens: {
+          access_token: accessToken,
+          refresh_token: refreshToken,
+          id_token: fakeIDToken(accountID),
+          account_id: accountID,
+        },
+      },
+      null,
+      2,
+    ),
+  );
 }
-const listen = args[args.indexOf("--listen") + 1];
-const url = new URL(listen);
-let threadSeq = 0;
-const server = Bun.serve({
-  hostname: url.hostname,
-  port: Number(url.port),
-  fetch(req, server) {
-    const path = new URL(req.url).pathname;
-    if (path === "/readyz" || path === "/healthz") return new Response("ok");
-    if (server.upgrade(req)) return undefined;
-    return new Response("not found", { status: 404 });
-  },
-  websocket: {
-    message(ws, raw) {
-      const msg = JSON.parse(String(raw));
-      if (msg.method === "initialize") {
-        ws.send(JSON.stringify({ jsonrpc: "2.0", id: msg.id, result: {} }));
-        return;
-      }
-      if (msg.method === "initialized") return;
-      if (msg.method === "thread/start") {
-        threadSeq += 1;
-        ws.send(JSON.stringify({ jsonrpc: "2.0", id: msg.id, result: { thread: { id: "thread-" + threadSeq } } }));
-        return;
-      }
-      if (msg.method === "turn/start") {
-        const prompt = msg.params?.input?.[0]?.text ?? "";
-        ws.send(JSON.stringify({ jsonrpc: "2.0", id: msg.id, result: { turn: { id: "turn-1", status: "inProgress", items: [], error: null } } }));
-        queueMicrotask(() => {
-          ws.send(JSON.stringify({ jsonrpc: "2.0", method: "item/agentMessage/delta", params: { threadId: msg.params.threadId, turnId: "turn-1", itemId: "item-1", delta: "APP_SERVER_OK: " + prompt } }));
-          ws.send(JSON.stringify({ jsonrpc: "2.0", method: "turn/completed", params: { threadId: msg.params.threadId, turn: { id: "turn-1", status: "completed", items: [], error: null } } }));
-        });
-      }
+
+function fakeIDToken(accountID: string): string {
+  return fakeJWT({
+    "https://api.openai.com/auth": {
+      chatgpt_account_id: accountID,
+      chatgpt_account_is_fedramp: false,
     },
-  },
-});
-console.error("fake codex app-server listening " + server.hostname + ":" + server.port);
-`;
+  });
+}
+
+function fakeJWT(payload: Record<string, unknown>): string {
+  return [base64URL({ alg: "none", typ: "JWT" }), base64URL(payload), "signature"].join(".");
+}
+
+function base64URL(value: unknown): string {
+  return Buffer.from(JSON.stringify(value)).toString("base64url");
 }

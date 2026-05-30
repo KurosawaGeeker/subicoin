@@ -229,7 +229,13 @@ class GatewayTestSeller {
       ws.addEventListener("open", () => resolve(), { once: true });
       ws.addEventListener("error", () => reject(new Error("seller websocket failed")), { once: true });
     });
-    sendEnvelope(ws as unknown as JSONSocket, { type: subiEnvelopeAgentHello, node_id: this.nodeID, version: "test", max_concurrency: 1 });
+    sendEnvelope(ws as unknown as JSONSocket, {
+      type: subiEnvelopeAgentHello,
+      node_id: this.nodeID,
+      version: "test",
+      max_concurrency: 1,
+      meta: { upstream_mode: "codex-login" },
+    });
     ws.addEventListener("message", (event) => this.handleMessage(String(event.data)));
     await delay(50);
   }

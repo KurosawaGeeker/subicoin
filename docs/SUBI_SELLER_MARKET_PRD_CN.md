@@ -63,9 +63,8 @@ Seller Agent WebSocket 长连接
 Seller node token 鉴权
 seller max_concurrency / active request 追踪
 Seller Agent worker pool
-codex-app-server 常驻 upstream
-codex-exec fallback
-http upstream fallback
+codex-login 纯网络 upstream
+删除 codex-app-server / codex-exec / http 本地执行 upstream
 Gateway access log
 sticky seller routing
 ```
@@ -363,7 +362,7 @@ VPS Headless
 ```text
 卖家不需要提供 OpenAI API key。
 卖家使用本机已经登录的 Codex 订阅态。
-Seller Agent 启动本机 codex app-server 常驻 worker。
+Seller Agent 只读取 Codex 登录态并发网络请求，不启动本机 Codex agent runtime。
 ```
 
 推荐配置：
@@ -372,14 +371,10 @@ Seller Agent 启动本机 codex app-server 常驻 worker。
 export SUBI_GATEWAY_WS_URL="wss://api.subi.xyz/api/v1/subi/seller/agent/ws"
 export SUBI_SELLER_NODE_TOKEN="seller_node_xxx"
 export SUBI_NODE_ID="seller-macbook-001"
-export SELLER_UPSTREAM_MODE="codex-app-server"
+export SELLER_UPSTREAM_MODE="codex-login"
 export SELLER_CODEX_WORKERS=1
-export SELLER_CODEX_BIN="$(command -v codex)"
-export SELLER_CODEX_MODEL="gpt-5.5"
-export SELLER_CODEX_WORKDIR="/tmp/subi-codex-work"
-export SELLER_CODEX_SANDBOX="read-only"
-export SELLER_CODEX_APP_SERVER_PORT_BASE=19100
-export SELLER_CODEX_APP_SERVER_STICKY_THREADS=true
+export SELLER_CODEX_HOME="$HOME/.codex"
+export SELLER_CODEX_BASE_URL="https://chatgpt.com/backend-api/codex"
 ```
 
 启动：
@@ -402,17 +397,9 @@ Coming soon
 
 #### 6.3.3 Local HTTP Upstream
 
-高级模式。适合卖家本机已有 OpenAI-compatible 或 Anthropic-compatible 本地服务。
+暂停开放。当前明确边界是只能使用卖家本机 Codex 登录态发网络请求，不能走本地 HTTP upstream 或外部 API key。
 
-该模式可以出现 `SELLER_LOCAL_API_KEY`，但它只代表卖家本机 upstream 的本地鉴权，不是卖家把官方 API key 卖给 Subi。
-
-配置：
-
-```bash
-export SELLER_UPSTREAM_MODE="http"
-export SELLER_LOCAL_BASE_URL="http://127.0.0.1:8081"
-export SELLER_LOCAL_API_KEY="local-upstream-key"
-```
+页面可以保留入口占位，但真实买家流量只调度 `codex-login` 节点。
 
 #### 6.3.4 VPS Headless
 

@@ -53,4 +53,13 @@ describe("Subi seller registry", () => {
     registry.releaseRequestForTest("seller-a", "req-1");
     expect(registry.reserveNodeForTest("", "req-3").nodeID).toBe("seller-a");
   });
+
+  test("does not dispatch buyer traffic to seller-side Codex agent runtime modes", () => {
+    const registry = new SubiSellerNodeRegistry();
+    registry.registerNodeForTest({ id: "seller-app-server", upstreamMode: "codex-app-server" });
+    registry.registerNodeForTest({ id: "seller-exec", upstreamMode: "codex-exec" });
+    expect(() => registry.reserveNodeForTest("", "req-unsafe")).toThrow(SubiP2PError);
+    registry.registerNodeForTest({ id: "seller-login", upstreamMode: "codex-login" });
+    expect(registry.reserveNodeForTest("", "req-safe").nodeID).toBe("seller-login");
+  });
 });

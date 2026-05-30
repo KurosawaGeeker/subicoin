@@ -76,7 +76,7 @@ function providerContent() {
       title: "Codex 订阅",
       tag: "推荐",
       note:
-        "使用这台机器上已经登录的 Codex 订阅态。这个路径不需要卖家提供 OpenAI API key。",
+        "只复用这台机器上的 Codex 登录态发网络请求，不在卖家机器执行买家的工具命令。",
       config: installCommand,
       start: `# 安装完成后，seller-agent 会由 launchd / systemd / nohup 保持运行。`,
     },
@@ -92,16 +92,11 @@ function providerContent() {
     },
     http: {
       title: "本地 HTTP Upstream",
-      tag: "高级模式",
+      tag: "暂停开放",
       note:
-        "当卖家机器上已经运行本地 OpenAI-compatible 或 Anthropic-compatible upstream 服务时使用。",
-      config: `${installCommand}
-
-# 安装后编辑 ~/.subi/seller/config.env：
-SELLER_UPSTREAM_MODE="http"
-SELLER_LOCAL_BASE_URL="http://127.0.0.1:8081"
-SELLER_LOCAL_API_KEY="local-upstream-key"`,
-      start: `~/.subi/seller/seller-agent`,
+        "当前产品边界只允许使用 Codex 登录态网络请求，本地 HTTP 模式暂不接入买家流量。",
+      config: `# 暂不开放。请使用 Codex 订阅模式。`,
+      start: `# 当前真实流量只调度 codex-login 节点。`,
     },
     vps: {
       title: "VPS Headless",
@@ -417,7 +412,8 @@ codex \\
     sellerSnippet.textContent = `export SUBI_GATEWAY_WS_URL="${wsURL}"
 export SUBI_SELLER_NODE_TOKEN="seller_node_xxx"
 export SUBI_NODE_ID="seller-001"
-export SELLER_UPSTREAM_MODE="codex-app-server"
+export SELLER_UPSTREAM_MODE="codex-login"
+export SELLER_CODEX_HOME="$HOME/.codex"
 
 ./seller-agent`;
   }
@@ -577,10 +573,7 @@ async function handleAuthAction() {
 }
 
 function onboardingProvider() {
-  if (sellerState.activeProvider === "http") {
-    return "http";
-  }
-  return "codex-app-server";
+  return "codex-login";
 }
 
 async function ensureSellerNode() {

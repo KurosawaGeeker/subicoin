@@ -550,7 +550,7 @@ export class Store {
 
   createSellerNode(userID: string, nodeIDValue: string, providerValue: string, maxConcurrencyValue: number): SellerNode {
     const nodeID = trim(nodeIDValue) || `seller-${sha256Hex(`${Date.now()}${Math.random()}`).slice(0, 8)}`;
-    const provider = trim(providerValue) || "codex-app-server";
+    const provider = trim(providerValue) || "codex-login";
     const maxConcurrency = maxConcurrencyValue > 0 ? maxConcurrencyValue : 1;
     const now = isoNow();
     const node: SellerNode = {

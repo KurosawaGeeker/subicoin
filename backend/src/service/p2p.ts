@@ -88,6 +88,7 @@ export interface JSONSocket {
 interface SellerNode {
   id: string;
   version: string;
+  upstreamMode: string;
   maxConcurrency: number;
   socket?: JSONSocket;
   lastSeen: number;
@@ -111,10 +112,11 @@ export class SubiSellerNodeRegistry {
   private requests = new Map<string, RequestState>();
   private sockets = new WeakMap<JSONSocket, SocketState>();
 
-  registerNodeForTest(node: { id: string; maxConcurrency?: number; lastSeen?: number }): void {
+  registerNodeForTest(node: { id: string; maxConcurrency?: number; lastSeen?: number; upstreamMode?: string }): void {
     this.registerNode({
       id: node.id,
       version: "test",
+      upstreamMode: node.upstreamMode ?? "codex-login",
       maxConcurrency: node.maxConcurrency ?? 1,
       lastSeen: node.lastSeen ?? Date.now(),
       activeRequests: new Set(),
@@ -167,6 +169,7 @@ export class SubiSellerNodeRegistry {
       this.registerNode({
         id: nodeID,
         version: trim(env.version),
+        upstreamMode: trim(env.meta?.upstream_mode),
         maxConcurrency: env.max_concurrency && env.max_concurrency > 0 ? env.max_concurrency : 1,
         socket,
         lastSeen: Date.now(),
@@ -301,7 +304,7 @@ export class SubiSellerNodeRegistry {
       if (stickyNodeID) {
         previousNodeID = stickyNodeID;
         const node = this.nodes.get(stickyNodeID);
-        if (!node || now - node.lastSeen > defaultSubiAgentStaleAfterMS) {
+        if (!node || now - node.lastSeen > defaultSubiAgentStaleAfterMS || !nodeDispatchable(node)) {
           this.sticky.delete(sessionHash);
         } else {
           if (!nodeHasCapacity(node)) throw errAgentBusy();
@@ -312,7 +315,7 @@ export class SubiSellerNodeRegistry {
     }
 
     for (const node of this.nodes.values()) {
-      if (now - node.lastSeen > defaultSubiAgentStaleAfterMS || !nodeHasCapacity(node)) continue;
+      if (now - node.lastSeen > defaultSubiAgentStaleAfterMS || !nodeDispatchable(node) || !nodeHasCapacity(node)) continue;
       reserveNodeRequest(node, requestID);
       if (sessionHash) this.sticky.set(sessionHash, node.id);
       return { node, previousNodeID };
@@ -466,6 +469,10 @@ function prepareSellerNode(node: SellerNode): void {
 function nodeHasCapacity(node: SellerNode): boolean {
   prepareSellerNode(node);
   return node.activeRequests.size < node.maxConcurrency;
+}
+
+function nodeDispatchable(node: SellerNode): boolean {
+  return node.upstreamMode === "codex-login";
 }
 
 function reserveNodeRequest(node: SellerNode, requestID: string): void {

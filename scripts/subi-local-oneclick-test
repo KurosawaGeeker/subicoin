@@ -4,17 +4,14 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 KEEP="${SUBI_LOCAL_TEST_KEEP:-0}"
 GATEWAY_PORT="${SUBI_LOCAL_TEST_GATEWAY_PORT:-}"
-UPSTREAM_PORT="${SUBI_LOCAL_TEST_UPSTREAM_PORT:-}"
 WORK_DIR="$(mktemp -d /tmp/subi-local-oneclick.XXXXXX)"
 COOKIE_FILE="$WORK_DIR/cookies.txt"
 GATEWAY_LOG="$WORK_DIR/gateway.log"
 SELLER_LOG="$WORK_DIR/seller-agent.log"
-UPSTREAM_LOG="$WORK_DIR/fake-upstream.log"
 FAILED=0
 
 GATEWAY_PID=""
 SELLER_PID=""
-UPSTREAM_PID=""
 
 fail() {
   printf 'fail: %s\n' "$*" >&2
@@ -89,12 +86,12 @@ cleanup() {
   if [[ "$code" -ne 0 ]]; then
     FAILED=1
   fi
-  for pid in "$SELLER_PID" "$GATEWAY_PID" "$UPSTREAM_PID"; do
+  for pid in "$SELLER_PID" "$GATEWAY_PID"; do
     if [[ -n "$pid" ]] && kill -0 "$pid" >/dev/null 2>&1; then
       kill "$pid" >/dev/null 2>&1 || true
     fi
   done
-  for pid in "$SELLER_PID" "$GATEWAY_PID" "$UPSTREAM_PID"; do
+  for pid in "$SELLER_PID" "$GATEWAY_PID"; do
     if [[ -n "$pid" ]]; then
       wait "$pid" 2>/dev/null || true
     fi
@@ -102,7 +99,6 @@ cleanup() {
   if [[ "$FAILED" == "1" ]]; then
     show_tail "$GATEWAY_LOG" "gateway.log"
     show_tail "$SELLER_LOG" "seller-agent.log"
-    show_tail "$UPSTREAM_LOG" "fake-upstream.log"
     printf '\ndebug files kept at: %s\n' "$WORK_DIR" >&2
   elif [[ "$KEEP" == "1" ]]; then
     printf 'debug files kept at: %s\n' "$WORK_DIR"
@@ -178,83 +174,6 @@ api_delete() {
   [[ "$code" == "$expected" ]] || fail "DELETE $path -> HTTP $code, expected $expected: $(tr -d '\n' <"$out" | head -c 500)"
 }
 
-start_fake_upstream() {
-  python3 -u - "$UPSTREAM_PORT" >"$UPSTREAM_LOG" 2>&1 <<'PY' &
-import json
-import sys
-import time
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-
-PORT = int(sys.argv[1])
-MARKER = "SUBI_LOCAL_E2E_OK"
-
-class Handler(BaseHTTPRequestHandler):
-    protocol_version = "HTTP/1.1"
-
-    def log_message(self, fmt, *args):
-        sys.stderr.write("%s - %s\n" % (self.address_string(), fmt % args))
-
-    def do_GET(self):
-        if self.path == "/health":
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", "11")
-            self.end_headers()
-            self.wfile.write(b'{"ok":true}')
-            return
-        self.send_error(404)
-
-    def do_POST(self):
-        length = int(self.headers.get("Content-Length", "0") or "0")
-        raw = self.rfile.read(length)
-        try:
-            body = json.loads(raw or b"{}")
-        except Exception:
-            body = {}
-        if body.get("stream"):
-            self.send_response(200)
-            self.send_header("Content-Type", "text/event-stream")
-            self.send_header("Cache-Control", "no-cache")
-            self.end_headers()
-            for event, data in [
-                ("response.output_text.delta", {"type": "response.output_text.delta", "delta": MARKER}),
-                ("response.completed", {"type": "response.completed"}),
-            ]:
-                self.wfile.write(f"event: {event}\n".encode())
-                self.wfile.write(("data: " + json.dumps(data) + "\n\n").encode())
-                self.wfile.flush()
-            return
-        response = {
-            "id": "resp_subi_local_e2e",
-            "object": "response",
-            "created_at": int(time.time()),
-            "model": body.get("model", "subi-local-fake"),
-            "output": [
-                {
-                    "id": "msg_subi_local_e2e",
-                    "type": "message",
-                    "status": "completed",
-                    "role": "assistant",
-                    "content": [{"type": "output_text", "text": MARKER}],
-                }
-            ],
-            "output_text": MARKER,
-        }
-        data = json.dumps(response, ensure_ascii=False).encode()
-        self.send_response(200)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("X-Subi-Upstream-Mode", "local-fake")
-        self.send_header("Content-Length", str(len(data)))
-        self.end_headers()
-        self.wfile.write(data)
-
-server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
-print(f"fake upstream listening on 127.0.0.1:{PORT}", flush=True)
-server.serve_forever()
-PY
-  UPSTREAM_PID=$!
-}
-
 need_cmd curl
 need_cmd python3
 need_cmd make
@@ -262,11 +181,7 @@ need_cmd make
 if [[ -z "$GATEWAY_PORT" ]]; then
   GATEWAY_PORT="$(free_port)"
 fi
-if [[ -z "$UPSTREAM_PORT" ]]; then
-  UPSTREAM_PORT="$(free_port)"
-fi
 BASE_URL="http://127.0.0.1:$GATEWAY_PORT"
-UPSTREAM_URL="http://127.0.0.1:$UPSTREAM_PORT"
 NODE_ID="seller-local-$(date +%s)-$$"
 EMAIL="subi-local-demo@subi.local"
 PASSWORD="password123"
@@ -275,10 +190,6 @@ BINARIES="$(detect_binaries)"
 GATEWAY_BIN="$(printf '%s\n' "$BINARIES" | sed -n '1p')"
 SELLER_BIN="$(printf '%s\n' "$BINARIES" | sed -n '2p')"
 pass "binaries ready"
-
-start_fake_upstream
-wait_http "$UPSTREAM_URL/health" 15 || fail "fake upstream did not become healthy"
-pass "fake upstream ready on $UPSTREAM_URL"
 
 env \
   SUBI_GATEWAY_ADDR="127.0.0.1:$GATEWAY_PORT" \
@@ -295,7 +206,7 @@ pass "gateway ready on $BASE_URL"
 api_post "/api/web/auth/register" "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}" "$WORK_DIR/register.json" 201
 pass "web account registered"
 
-api_post "/api/web/seller/nodes" "{\"node_id\":\"$NODE_ID\",\"provider\":\"http\",\"max_concurrency\":1}" "$WORK_DIR/seller-node.json" 201
+api_post "/api/web/seller/nodes" "{\"node_id\":\"$NODE_ID\",\"provider\":\"codex-login\",\"max_concurrency\":1}" "$WORK_DIR/seller-node.json" 201
 api_post "/api/web/seller/nodes/$NODE_ID/setup-token" '{}' "$WORK_DIR/setup-token.json" 201
 SETUP_TOKEN="$(json_get 'd["setup_token"]' <"$WORK_DIR/setup-token.json")"
 api_get "/api/v1/subi/seller/setup?token=$SETUP_TOKEN" "$WORK_DIR/seller-setup.json" 200
@@ -307,10 +218,10 @@ env \
   SUBI_GATEWAY_WS_URL="$WS_URL" \
   SUBI_SELLER_NODE_TOKEN="$NODE_TOKEN" \
   SUBI_NODE_ID="$NODE_ID" \
-  SELLER_UPSTREAM_MODE="http" \
+  SELLER_UPSTREAM_MODE="codex-login" \
   SELLER_WORKERS="1" \
-  SELLER_LOCAL_BASE_URL="$UPSTREAM_URL" \
-  SELLER_LOCAL_API_KEY="subi-local-fake-upstream-key" \
+  SELLER_CODEX_HOME="$HOME/.codex" \
+  SELLER_CODEX_BASE_URL="https://chatgpt.com/backend-api/codex" \
   "$SELLER_BIN" >"$SELLER_LOG" 2>&1 &
 SELLER_PID=$!
 
@@ -338,17 +249,17 @@ curl -sS "$BASE_URL/seller/" | grep -q "Seller" || fail "seller page did not loa
 pass "buyer/seller web pages are served"
 
 RESPONSE_CODE="$(
-  curl -sS -D "$WORK_DIR/response.headers" -o "$WORK_DIR/response.json" -w '%{http_code}' --max-time 30 \
+  curl -sS -D "$WORK_DIR/response.headers" -o "$WORK_DIR/response.json" -w '%{http_code}' --max-time 120 \
     "$BASE_URL/v1/responses" \
     -H "Authorization: Bearer $BUYER_KEY" \
     -H 'Content-Type: application/json' \
     -H 'x-session-id: local-oneclick' \
-    -d '{"model":"subi-local-fake","input":"Reply exactly: SUBI_LOCAL_E2E_OK","stream":false}' || true
+    -d '{"model":"gpt-5.5","instructions":"You are a test responder. Reply exactly with the requested token.","input":[{"role":"user","content":"Reply exactly: SUBI_LOCAL_E2E_OK"}],"stream":true,"store":false}' || true
 )"
 [[ "$RESPONSE_CODE" == "200" ]] || fail "buyer /v1/responses returned HTTP $RESPONSE_CODE: $(tr -d '\n' <"$WORK_DIR/response.json" | head -c 500)"
 grep -q "SUBI_LOCAL_E2E_OK" "$WORK_DIR/response.json" || fail "buyer response did not contain SUBI_LOCAL_E2E_OK"
 grep -qi "X-Subi-Seller-Node: $NODE_ID" "$WORK_DIR/response.headers" || fail "response did not include expected X-Subi-Seller-Node"
-pass "buyer -> gateway -> seller-agent -> fake upstream response succeeded"
+pass "buyer -> gateway -> seller-agent -> Codex login backend response succeeded"
 
 api_get "/api/web/buyer/balance" "$WORK_DIR/balance-after.json" 200
 api_get "/api/web/buyer/usage?limit=20" "$WORK_DIR/usage.json" 200

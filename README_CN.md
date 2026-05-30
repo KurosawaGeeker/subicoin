@@ -252,19 +252,17 @@ curl -fsSL http://13.230.32.216:18081/api/v1/subi/seller/install.sh | bash -s --
 export SUBI_GATEWAY_WS_URL="ws://<gateway-host>:18080/api/v1/subi/seller/agent/ws"
 export SUBI_SELLER_NODE_TOKEN="<seller node token>"
 export SUBI_NODE_ID="seller-001"
-export SELLER_UPSTREAM_MODE="codex-app-server"
+export SELLER_UPSTREAM_MODE="codex-login"
 export SELLER_CODEX_WORKERS=1
-export SELLER_CODEX_BIN="$(command -v codex)"
-export SELLER_CODEX_MODEL="gpt-5.5"
-export SELLER_CODEX_WORKDIR="/tmp/subi-codex-work"
-export SELLER_CODEX_SANDBOX="read-only"
-export SELLER_CODEX_APP_SERVER_PORT_BASE=19100
-export SELLER_CODEX_APP_SERVER_STICKY_THREADS=true
+export SELLER_CODEX_HOME="$HOME/.codex"
+export SELLER_CODEX_BASE_URL="https://chatgpt.com/backend-api/codex"
 
 ./dist/seller-agent
 ```
 
-推荐模式是 `codex-app-server`。它会保持本机 Codex app-server 常驻，并把 delta 流式回传给买家。`codex-exec` 只作为兜底模式，每个请求都会启动一次 `codex exec`，延迟更高且不是真正 token streaming。
+真实买家流量只使用 `codex-login`。它读取卖家本机 Codex ChatGPT 登录态，并把 Responses 请求作为纯网络请求转发到 Codex 后端；不会启动 `codex exec`，不会启动 `codex app-server`，也不会给买家请求提供卖家机器上的 cwd、shell 或工具运行环境。
+
+旧的本地执行模式（`codex-app-server`、`codex-exec` 和 `http`）已从 seller-agent 删除，因为它们会把卖家机器的 cwd、shell 和工具运行环境暴露给买家流量。
 
 ## Buyer 使用方式
 

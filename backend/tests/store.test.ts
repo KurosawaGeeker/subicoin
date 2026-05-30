@@ -25,7 +25,7 @@ describe("Store", () => {
       store.deleteBuyerAPIKey(user.id, temporaryKey.api_key.id);
       expect(store.listBuyerAPIKeys(user.id).some((key) => key.id === temporaryKey.api_key.id)).toBe(false);
       expect(() => store.authenticateBuyerAPIKey(temporaryKey.secret)).toThrow();
-      const node = store.createSellerNode(user.id, "seller-macbook-001", "codex-app-server", 1);
+      const node = store.createSellerNode(user.id, "seller-macbook-001", "codex-login", 1);
       expect(node.node_id).toBe("seller-macbook-001");
       const setup = store.createSellerSetupToken(user.id, node.node_id, 60_000);
       expect(setup.setup_token).toStartWith("subi_setup_");
@@ -47,7 +47,7 @@ describe("Store", () => {
       const buyer = store.registerUser("buyer@example.com", "password123");
       const seller = store.registerUser("seller@example.com", "password123");
       const apiKey = store.createBuyerAPIKey(buyer.id, "Codex");
-      const node = store.createSellerNode(seller.id, "seller-001", "codex-app-server", 1);
+      const node = store.createSellerNode(seller.id, "seller-001", "codex-login", 1);
       expect(store.getBuyerCreditWallet(buyer.id).balance_micros).toBe(0);
       try {
         store.reserveBuyerCreditsForRequest(buyer.id, "req-empty", creditMicrosPerCredit, "test");

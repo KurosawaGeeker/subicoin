@@ -792,12 +792,8 @@ SUBI_SELLER_NODE_TOKEN=${JSON.stringify(setup.node_token)}
 SUBI_NODE_ID=${JSON.stringify(setup.node_id)}
 SELLER_UPSTREAM_MODE=${JSON.stringify(setup.provider)}
 SELLER_CODEX_WORKERS=${setup.max_concurrency}
-SELLER_CODEX_BIN="$(command -v codex)"
-SELLER_CODEX_MODEL="gpt-5.5"
-SELLER_CODEX_WORKDIR="/tmp/subi-codex-work"
-SELLER_CODEX_SANDBOX="read-only"
-SELLER_CODEX_APP_SERVER_PORT_BASE=19100
-SELLER_CODEX_APP_SERVER_STICKY_THREADS=true`;
+SELLER_CODEX_HOME="$HOME/.codex"
+SELLER_CODEX_BASE_URL="https://chatgpt.com/backend-api/codex"`;
 }
 
 async function handleStatic(req: Request, cfg: GatewayConfig): Promise<Response | undefined> {

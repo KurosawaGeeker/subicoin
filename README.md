@@ -59,8 +59,7 @@ web admin frontend, old deployment templates) was removed.
 - `backend/src/cmd/subi-gateway.ts`: standalone Gateway for buyer HTTP requests and
   seller WebSocket connections.
 - `backend/src/cmd/seller-agent.ts`: seller-side agent that connects to the Gateway
-  and calls a local upstream, currently persistent `codex app-server`,
-  per-request `codex exec`, or an HTTP-compatible local endpoint.
+  and proxies Responses requests through the seller's Codex ChatGPT login state.
 - `backend/src/service/p2p.ts`: in-memory seller registry, sticky
   routing, request dispatch, and WebSocket envelopes.
 - `backend/src/service/session.ts`: optional buyer session context
@@ -233,14 +232,10 @@ Required environment:
 export SUBI_GATEWAY_WS_URL="ws://<gateway-host>:18080/api/v1/subi/seller/agent/ws"
 export SUBI_SELLER_NODE_TOKEN="<seller node token>"
 export SUBI_NODE_ID="seller-001"
-export SELLER_UPSTREAM_MODE="codex-app-server"
+export SELLER_UPSTREAM_MODE="codex-login"
 export SELLER_CODEX_WORKERS=1
-export SELLER_CODEX_BIN="$(command -v codex)"
-export SELLER_CODEX_MODEL="gpt-5.5"
-export SELLER_CODEX_WORKDIR="/tmp/subi-codex-work"
-export SELLER_CODEX_SANDBOX="read-only"
-export SELLER_CODEX_APP_SERVER_PORT_BASE=19100
-export SELLER_CODEX_APP_SERVER_STICKY_THREADS=true
+export SELLER_CODEX_HOME="$HOME/.codex"
+export SELLER_CODEX_BASE_URL="https://chatgpt.com/backend-api/codex"
 ```
 
 Run:
@@ -281,20 +276,18 @@ Run the seller doctor after installation:
 ./scripts/subi-seller-doctor
 ```
 
-`SELLER_CODEX_WORKERS` controls the seller-side worker pool size and is reported
-to the Gateway as this node's `max_concurrency`.
+`SELLER_CODEX_WORKERS` controls the seller-side network worker pool size and is
+reported to the Gateway as this node's `max_concurrency`.
 
-`codex-app-server` keeps one local Codex app-server process alive per worker and
-streams app-server deltas back to the buyer as OpenAI-compatible SSE. Use
-`SELLER_UPSTREAM_MODE=codex-exec` only as a fallback; that mode starts a fresh
-`codex exec` process for every request and does not provide true token
-streaming.
+`codex-login` is the only mode intended for buyer traffic. It reads the seller's
+Codex ChatGPT login state from `SELLER_CODEX_HOME/auth.json` and proxies
+Responses requests to the Codex backend. It does not start `codex exec`, does
+not start `codex app-server`, and does not give buyer requests a seller-side
+cwd, shell, or tool runtime.
 
-With `SELLER_CODEX_APP_SERVER_STICKY_THREADS=true`, the agent reuses a Codex
-thread for the same Subi session hash on that worker, reducing repeated
-`thread/start` overhead and keeping seller-side runtime context warm.
-For strict session ordering in this MVP, keep `SELLER_CODEX_WORKERS=1`; worker
-level session pinning is a later scheduler improvement.
+The old local-execution seller modes (`codex-app-server`, `codex-exec`, and
+`http`) have been removed from seller-agent because they exposed the seller
+machine's cwd, shell, and tool runtime to buyer traffic.
 
 ## Buyer
 
