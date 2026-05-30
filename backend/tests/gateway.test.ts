@@ -78,6 +78,41 @@ describe("Gateway", () => {
     seller.close();
   });
 
+  test("Codex tool protocol requests are passed through without Subi text-history rewrite", async () => {
+    const h = newGatewayTestHarness(true);
+    const seller = await h.startSeller("seller-001", ["tool-plan", "tool-result-seen"]);
+    const firstPayload = {
+      model: "gpt-5.5",
+      stream: false,
+      tools: [{ type: "function", name: "shell", parameters: { type: "object" } }],
+      input: [{ role: "user", content: "look for nova" }],
+    };
+    const firstResp = await h.postRaw("codex-tool-session", firstPayload);
+    expect(firstResp.body).toContain("tool-plan");
+    const firstReq = await seller.nextRequest();
+    const firstBody = JSON.parse(new TextDecoder().decode(firstReq.body));
+    expect(firstBody.metadata?.subi_context_injected).toBeUndefined();
+    expect(firstBody.tools).toHaveLength(1);
+    expect(firstBody.input).toEqual(firstPayload.input);
+
+    const continuationPayload = {
+      model: "gpt-5.5",
+      stream: false,
+      input: [
+        { type: "function_call", call_id: "call_1", name: "shell", arguments: "{}" },
+        { type: "function_call_output", call_id: "call_1", output: "nova not found" },
+      ],
+    };
+    const secondResp = await h.postRaw("codex-tool-session", continuationPayload);
+    expect(secondResp.body).toContain("tool-result-seen");
+    const secondReq = await seller.nextRequest();
+    const secondBody = JSON.parse(new TextDecoder().decode(secondReq.body));
+    expect(secondBody.metadata?.subi_context_injected).toBeUndefined();
+    expect(secondBody.input).toEqual(continuationPayload.input);
+    expect(new TextDecoder().decode(secondReq.body)).not.toContain("tool-plan");
+    seller.close();
+  });
+
   test("no seller returns readable error", async () => {
     const h = newGatewayTestHarness(true);
     const resp = await h.post("no-seller", "should not run", 503);
@@ -202,6 +237,16 @@ function newGatewayTestHarness(sessionContextEnabled: boolean, store?: Store) {
         method: "POST",
         headers: { Authorization: "Bearer buyer-secret", "Content-Type": "application/json", "x-session-id": sessionID },
         body: JSON.stringify({ model: "subi-codex-subscription", stream: false, input }),
+      });
+      const body = await resp.text();
+      expect(resp.status, body).toBe(expectedStatus);
+      return { headers: resp.headers, body, status: resp.status };
+    },
+    async postRaw(sessionID: string, payload: unknown, expectedStatus = 200) {
+      const resp = await fetch(`${baseURL}/v1/responses`, {
+        method: "POST",
+        headers: { Authorization: "Bearer buyer-secret", "Content-Type": "application/json", "x-session-id": sessionID },
+        body: JSON.stringify(payload),
       });
       const body = await resp.text();
       expect(resp.status, body).toBe(expectedStatus);

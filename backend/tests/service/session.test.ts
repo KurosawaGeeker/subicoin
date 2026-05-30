@@ -3,6 +3,7 @@ import {
   buildSubiContextualRequestBody,
   extractSubiAssistantText,
   extractSubiSessionID,
+  isSubiSessionContextEligible,
   SubiSessionStore,
   subiContextSystemPrompt,
   type SubiSessionTurn,
@@ -34,6 +35,36 @@ describe("Subi session context", () => {
     expect(body.input[2].content).toBe("saved");
     expect(body.input[3].content).toBe("what is my code?");
     expect(body.metadata.subi_context_injected).toBe(true);
+  });
+
+  test("does not rewrite Codex tool protocol Responses bodies", () => {
+    const history: SubiSessionTurn[] = [
+      { role: "user", content: "old request", request_id: "req-1", created_at: new Date().toISOString() },
+      { role: "assistant", content: "old answer", request_id: "req-1", created_at: new Date().toISOString() },
+    ];
+    const toolRequest = JSON.stringify({
+      model: "gpt-5.5",
+      stream: true,
+      tools: [{ type: "function", name: "shell", parameters: { type: "object" } }],
+      input: [{ role: "user", content: "look for nova" }],
+    });
+    expect(isSubiSessionContextEligible(toolRequest, "/v1/responses")).toBe(false);
+    const rewrittenToolRequest = buildSubiContextualRequestBody(toolRequest, "/v1/responses", history, "look for nova");
+    expect(rewrittenToolRequest.rewritten).toBe(false);
+    expect(new TextDecoder().decode(rewrittenToolRequest.body)).toBe(toolRequest);
+
+    const toolContinuation = JSON.stringify({
+      model: "gpt-5.5",
+      stream: true,
+      input: [
+        { type: "function_call", call_id: "call_1", name: "shell", arguments: "{}" },
+        { type: "function_call_output", call_id: "call_1", output: "nova not found" },
+      ],
+    });
+    expect(isSubiSessionContextEligible(toolContinuation, "/v1/responses")).toBe(false);
+    const rewrittenToolContinuation = buildSubiContextualRequestBody(toolContinuation, "/v1/responses", history, "nova not found");
+    expect(rewrittenToolContinuation.rewritten).toBe(false);
+    expect(new TextDecoder().decode(rewrittenToolContinuation.body)).toBe(toolContinuation);
   });
 
   test("store truncates old turns", () => {

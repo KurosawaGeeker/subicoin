@@ -150,6 +150,9 @@ export function buildSubiContextualRequestBody(
   history: SubiSessionTurn[],
   currentUserText: string,
 ): { body: Uint8Array; injected: number; rewritten: boolean } {
+  if (!isSubiSessionContextEligible(body, path)) {
+    return { body: toBytes(body), injected: 0, rewritten: false };
+  }
   const userText = trim(currentUserText);
   if (!userText || history.length === 0) {
     return { body: toBytes(body), injected: 0, rewritten: false };
@@ -181,6 +184,24 @@ export function buildSubiContextualRequestBody(
   return { body: new TextEncoder().encode(JSON.stringify(root)), injected, rewritten: true };
 }
 
+export function isSubiSessionContextEligible(body: Uint8Array | string, path: string): boolean {
+  const pathOnly = sessionPathOnly(path);
+  if (!isResponsesPath(pathOnly)) return true;
+
+  const payload = safeJSONParse<any>(body);
+  if (!isPlainObject(payload)) return false;
+  if (trim(payload.previous_response_id)) return false;
+  if (Array.isArray(payload.tools) && payload.tools.length > 0) return false;
+  if (payload.tool_choice !== undefined) return false;
+
+  const input = payload.input;
+  if (typeof input === "string") return true;
+  if (Array.isArray(input)) {
+    return input.length === 1 && isSimpleResponsesUserMessage(input[0]);
+  }
+  return isSimpleResponsesUserMessage(input);
+}
+
 export function extractSubiAssistantText(body: Uint8Array | string, contentType = ""): string {
   const text = typeof body === "string" ? body.trim() : new TextDecoder().decode(body).trim();
   if (!text) return "";
@@ -202,6 +223,27 @@ function historyToMessages(history: SubiSessionTurn[]): { messages: Array<{ role
     }
   }
   return { messages, injected: messages.length };
+}
+
+function isSimpleResponsesUserMessage(value: unknown): boolean {
+  if (!isPlainObject(value)) return false;
+  const type = trim(value.type);
+  if (type && type !== "message") return false;
+  if (trim(value.role).toLowerCase() !== "user") return false;
+  return isSimpleTextContent(value.content);
+}
+
+function isSimpleTextContent(value: unknown): boolean {
+  if (typeof value === "string") return true;
+  if (!Array.isArray(value)) return false;
+  if (value.length === 0) return true;
+  for (const item of value) {
+    if (typeof item === "string") continue;
+    if (!isPlainObject(item)) return false;
+    const type = trim(item.type);
+    if (type !== "input_text" && type !== "text") return false;
+  }
+  return true;
 }
 
 function latestRoleTextOrText(value: unknown, role: string): [string, boolean] {

@@ -18,6 +18,7 @@ import {
   extractSubiAssistantText,
   extractSubiSessionID,
   extractSubiUserText,
+  isSubiSessionContextEligible,
   SubiSessionStore,
   subiSessionHash,
 } from "./service/session";
@@ -320,27 +321,31 @@ async function handleBuyerRequest(req: Request, cfg: GatewayConfig): Promise<Res
   let responseContentType = "";
   const responseBodyParts: Uint8Array[] = [];
   let sessionSaved = false;
+  let sessionTextContextActive = false;
   if (cfg.session_context_enabled) {
     baseHeaders.set("X-Subi-Session-ID", sessionID);
     sessionHashValue = subiSessionHash(sessionID);
-    const snapshot = cfg.session_store.snapshot(sessionID, buyerKeyHash);
-    previousSellerNode = snapshot.last_seller_node;
-    const extracted = extractSubiUserText(body, url.pathname);
-    if (extracted[1]) {
-      userText = extracted[0];
-      try {
-        const rewritten = buildSubiContextualRequestBody(body, url.pathname, snapshot.turns, userText);
-        if (rewritten.rewritten) {
-          body = rewritten.body;
-          historyTurnsInjected = rewritten.injected;
+    sessionTextContextActive = isSubiSessionContextEligible(body, url.pathname);
+    if (sessionTextContextActive) {
+      const snapshot = cfg.session_store.snapshot(sessionID, buyerKeyHash);
+      previousSellerNode = snapshot.last_seller_node;
+      const extracted = extractSubiUserText(body, url.pathname);
+      if (extracted[1]) {
+        userText = extracted[0];
+        try {
+          const rewritten = buildSubiContextualRequestBody(body, url.pathname, snapshot.turns, userText);
+          if (rewritten.rewritten) {
+            body = rewritten.body;
+            historyTurnsInjected = rewritten.injected;
+          }
+        } catch (error) {
+          console.error(`subi session context rewrite failed: request_id=${requestID} session_id=${sessionID} error=${error}`);
         }
-      } catch (error) {
-        console.error(`subi session context rewrite failed: request_id=${requestID} session_id=${sessionID} error=${error}`);
       }
     }
   }
   const saveSession = () => {
-    if (sessionSaved || !cfg.session_context_enabled || status < 200 || status >= 400) return;
+    if (sessionSaved || !cfg.session_context_enabled || !sessionTextContextActive || status < 200 || status >= 400) return;
     sessionSaved = true;
     const combined = concatBytes(responseBodyParts);
     const assistantText = extractSubiAssistantText(combined, responseContentType);
