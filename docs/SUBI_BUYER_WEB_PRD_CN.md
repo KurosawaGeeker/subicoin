@@ -434,7 +434,7 @@ request_id
 note
 ```
 
-当前 Gateway 已有 access log、买家账户、余额扣费、credit ledger、request fill 和 seller earning ledger。Web MVP 下一步需要把页面从 mock 数据切到这些真实接口。
+当前 Gateway 已有 access log、买家账户、余额扣费、credit ledger、request fill 和 seller earning ledger。Buyer Web 已接入余额、模拟充值、API key、Usage 和 Credit ledger 的真实接口。
 
 ## 7. Credit 计费要求
 
@@ -640,7 +640,6 @@ MVP-1 Buyer Web 通过标准：
 买家能创建、隐藏、复制、吊销 API key
 买家能购买或模拟购买 Credits
 买家能在 Codex CLI Tab 复制正确配置
-买家能运行 Doctor 并看到明确结果
 买家能发起一次请求，并在 Usage 看到 request_id
 一次成功请求能产生扣费记录
 余额不足时 Gateway 拒绝请求并提示购买 Credits
@@ -655,11 +654,11 @@ MVP-1 Buyer Web 通过标准：
 1. Buyer Web 页面
    Dashboard / Credits / Setup / Usage，优先读取真实接口。
 
-2. Buyer API key 和 Doctor
-   接真实服务可用性、API key 校验、/v1/responses 自检。
+2. Buyer API key
+   已接入创建、隐藏、复制、吊销和列表展示。Doctor 暂缓，不作为最快推进主线。
 
 3. Credit ledger
-   已实现买家余额、mock 充值订单、请求预扣 / 失败退款、Usage 关联 request_id 和 seller earning ledger。
+   已实现买家余额、mock 充值订单、请求预扣 / 失败退款、Usage 关联 request_id、Credit ledger 页面展示和 seller earning ledger。
 
 4. 真实支付入口
    接入支付系统或后台确认充值流程。

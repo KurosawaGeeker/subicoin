@@ -89,6 +89,39 @@ export OPENAI_API_KEY="<Subi buyer key>"
 6. Seller-side secrets and logged-in runtime state stay on the Seller machine.
    Buyer should not receive seller tokens or seller ChatGPT/Codex credentials.
 
+## Local Web Test Account
+
+Use this non-production account for local SQLite UI smoke tests only:
+
+```text
+Email: subi-local-demo@subi.local
+Password: password123
+```
+
+If the local DB is fresh, create it once from the Register tab in either the
+Buyer or Seller sign-in modal. The same account can access both consoles because
+current MVP Web auth uses one shared user table.
+
+To write this account into a running local Gateway DB:
+
+```bash
+make seed-local-test-account
+```
+
+The seed target defaults to `http://127.0.0.1:18081`. To target another local
+Gateway:
+
+```bash
+SUBI_SEED_BASE_URL="http://127.0.0.1:<port>" make seed-local-test-account
+```
+
+It is idempotent for the account itself: if the user already exists, it verifies
+that the password can sign in. It does not add credits unless explicitly asked:
+
+```bash
+SUBI_SEED_ADD_CREDITS=100 make seed-local-test-account
+```
+
 ## Current MVP-1 Session Test
 
 Local automated session tests do not require a real second seller. They use fake

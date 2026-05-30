@@ -1,4 +1,4 @@
-.PHONY: build build-gateway build-agent build-linux-amd64 build-darwin-arm64 test test-subi-mvp1-session tidy clean
+.PHONY: build build-gateway build-agent build-linux-amd64 build-darwin-arm64 test test-subi-mvp1-session test-local-oneclick seed-local-test-account tidy clean
 
 DIST_DIR := dist
 GO_IMAGE ?= golang:1.26.3-alpine
@@ -39,6 +39,12 @@ test:
 
 test-subi-mvp1-session:
 	@./scripts/subi-mvp1-session-test
+
+test-local-oneclick:
+	@./scripts/subi-local-oneclick-test
+
+seed-local-test-account:
+	@./scripts/subi-seed-local-test-account
 
 tidy:
 	@$(GO_BACKEND) mod tidy

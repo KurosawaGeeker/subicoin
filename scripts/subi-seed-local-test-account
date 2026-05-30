@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+BASE_URL="${SUBI_SEED_BASE_URL:-http://127.0.0.1:18081}"
+EMAIL="${SUBI_SEED_EMAIL:-subi-local-demo@subi.local}"
+PASSWORD="${SUBI_SEED_PASSWORD:-password123}"
+ADD_CREDITS="${SUBI_SEED_ADD_CREDITS:-0}"
+COOKIE_FILE="$(mktemp /tmp/subi-seed-cookie.XXXXXX)"
+BODY_FILE="$(mktemp /tmp/subi-seed-body.XXXXXX)"
+
+cleanup() {
+  rm -f "$COOKIE_FILE" "$BODY_FILE"
+}
+trap cleanup EXIT
+
+fail() {
+  printf 'fail: %s\n' "$*" >&2
+  if [[ -s "$BODY_FILE" ]]; then
+    printf 'body: %s\n' "$(tr -d '\n' <"$BODY_FILE" | head -c 500)" >&2
+  fi
+  exit 1
+}
+
+pass() {
+  printf 'ok: %s\n' "$*"
+}
+
+need_cmd() {
+  command -v "$1" >/dev/null 2>&1 || fail "$1 is required"
+}
+
+json_payload() {
+  python3 - "$EMAIL" "$PASSWORD" <<'PY'
+import json
+import sys
+print(json.dumps({"email": sys.argv[1], "password": sys.argv[2]}))
+PY
+}
+
+need_cmd curl
+need_cmd python3
+
+BASE_URL="${BASE_URL%/}"
+
+health_code="$(curl -sS -o "$BODY_FILE" -w '%{http_code}' --max-time 5 "$BASE_URL/health" || true)"
+[[ "$health_code" == "200" ]] || fail "gateway health check failed: $BASE_URL/health -> HTTP $health_code"
+pass "gateway healthy: $BASE_URL"
+
+auth_payload="$(json_payload)"
+register_code="$(
+  curl -sS -b "$COOKIE_FILE" -c "$COOKIE_FILE" -o "$BODY_FILE" -w '%{http_code}' --max-time 10 \
+    "$BASE_URL/api/web/auth/register" \
+    -H 'Content-Type: application/json' \
+    -d "$auth_payload" || true
+)"
+
+case "$register_code" in
+  201)
+    pass "created local test account: $EMAIL"
+    ;;
+  409)
+    login_code="$(
+      curl -sS -b "$COOKIE_FILE" -c "$COOKIE_FILE" -o "$BODY_FILE" -w '%{http_code}' --max-time 10 \
+        "$BASE_URL/api/web/auth/login" \
+        -H 'Content-Type: application/json' \
+        -d "$auth_payload" || true
+    )"
+    [[ "$login_code" == "200" ]] || fail "account exists but login failed: $EMAIL -> HTTP $login_code"
+    pass "local test account already exists and login works: $EMAIL"
+    ;;
+  *)
+    fail "register failed: $EMAIL -> HTTP $register_code"
+    ;;
+esac
+
+me_code="$(curl -sS -b "$COOKIE_FILE" -c "$COOKIE_FILE" -o "$BODY_FILE" -w '%{http_code}' --max-time 10 "$BASE_URL/api/web/auth/me" || true)"
+[[ "$me_code" == "200" ]] || fail "auth session check failed -> HTTP $me_code"
+pass "auth session verified"
+
+if [[ "$ADD_CREDITS" != "0" ]]; then
+  credit_code="$(
+    curl -sS -b "$COOKIE_FILE" -c "$COOKIE_FILE" -o "$BODY_FILE" -w '%{http_code}' --max-time 10 \
+      "$BASE_URL/api/web/buyer/credits/orders" \
+      -H 'Content-Type: application/json' \
+      -d "{\"amount_credits\":$ADD_CREDITS}" || true
+  )"
+  [[ "$credit_code" == "201" ]] || fail "credit top-up failed -> HTTP $credit_code"
+  pass "added $ADD_CREDITS local test credits"
+fi
+
+printf '\nLocal test account is ready.\n'
+printf 'Base URL: %s\n' "$BASE_URL"
+printf 'Email:    %s\n' "$EMAIL"
+printf 'Password: %s\n' "$PASSWORD"

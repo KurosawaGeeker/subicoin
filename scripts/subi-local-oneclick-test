@@ -1,0 +1,372 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+KEEP="${SUBI_LOCAL_TEST_KEEP:-0}"
+GATEWAY_PORT="${SUBI_LOCAL_TEST_GATEWAY_PORT:-}"
+UPSTREAM_PORT="${SUBI_LOCAL_TEST_UPSTREAM_PORT:-}"
+WORK_DIR="$(mktemp -d /tmp/subi-local-oneclick.XXXXXX)"
+COOKIE_FILE="$WORK_DIR/cookies.txt"
+GATEWAY_LOG="$WORK_DIR/gateway.log"
+SELLER_LOG="$WORK_DIR/seller-agent.log"
+UPSTREAM_LOG="$WORK_DIR/fake-upstream.log"
+FAILED=0
+
+GATEWAY_PID=""
+SELLER_PID=""
+UPSTREAM_PID=""
+
+fail() {
+  printf 'fail: %s\n' "$*" >&2
+  exit 1
+}
+
+info() {
+  printf 'info: %s\n' "$*" >&2
+}
+
+pass() {
+  printf 'ok: %s\n' "$*"
+}
+
+need_cmd() {
+  command -v "$1" >/dev/null 2>&1 || fail "$1 is required"
+}
+
+free_port() {
+  python3 - <<'PY'
+import socket
+s = socket.socket()
+s.bind(("127.0.0.1", 0))
+print(s.getsockname()[1])
+s.close()
+PY
+}
+
+json_get() {
+  local expr="$1"
+  python3 -c 'import json, sys; d=json.load(sys.stdin); v=eval(sys.argv[1], {}, {"d": d}); print("" if v is None else v)' "$expr"
+}
+
+wait_http() {
+  local url="$1"
+  local seconds="${2:-20}"
+  local code=""
+  for _ in $(seq 1 "$seconds"); do
+    code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 "$url" 2>/dev/null || true)"
+    if [[ "$code" == "200" ]]; then
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
+
+wait_log_contains() {
+  local file="$1"
+  local needle="$2"
+  local seconds="${3:-20}"
+  for _ in $(seq 1 "$seconds"); do
+    if [[ -f "$file" ]] && grep -q "$needle" "$file"; then
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
+
+show_tail() {
+  local file="$1"
+  local label="$2"
+  if [[ -f "$file" ]]; then
+    printf '\n--- %s ---\n' "$label" >&2
+    tail -n 80 "$file" >&2 || true
+  fi
+}
+
+cleanup() {
+  local code=$?
+  if [[ "$code" -ne 0 ]]; then
+    FAILED=1
+  fi
+  for pid in "$SELLER_PID" "$GATEWAY_PID" "$UPSTREAM_PID"; do
+    if [[ -n "$pid" ]] && kill -0 "$pid" >/dev/null 2>&1; then
+      kill "$pid" >/dev/null 2>&1 || true
+    fi
+  done
+  for pid in "$SELLER_PID" "$GATEWAY_PID" "$UPSTREAM_PID"; do
+    if [[ -n "$pid" ]]; then
+      wait "$pid" 2>/dev/null || true
+    fi
+  done
+  if [[ "$FAILED" == "1" ]]; then
+    show_tail "$GATEWAY_LOG" "gateway.log"
+    show_tail "$SELLER_LOG" "seller-agent.log"
+    show_tail "$UPSTREAM_LOG" "fake-upstream.log"
+    printf '\ndebug files kept at: %s\n' "$WORK_DIR" >&2
+  elif [[ "$KEEP" == "1" ]]; then
+    printf 'debug files kept at: %s\n' "$WORK_DIR"
+  else
+    rm -rf "$WORK_DIR"
+  fi
+}
+trap cleanup EXIT
+
+detect_binaries() {
+  local os arch target gateway agent
+  os="$(uname -s)"
+  arch="$(uname -m)"
+  case "$os:$arch" in
+    Darwin:arm64)
+      target="build-darwin-arm64"
+      gateway="$ROOT/dist/subi-gateway-darwin-arm64"
+      agent="$ROOT/dist/seller-agent-darwin-arm64"
+      ;;
+    Linux:x86_64|Linux:amd64)
+      target="build-linux-amd64"
+      gateway="$ROOT/dist/subi-gateway-linux-amd64"
+      agent="$ROOT/dist/seller-agent-linux-amd64"
+      ;;
+    *)
+      target="build"
+      gateway="$ROOT/dist/subi-gateway"
+      agent="$ROOT/dist/seller-agent"
+      ;;
+  esac
+
+  if [[ ! -x "$gateway" || ! -x "$agent" ]]; then
+    info "building local binaries with: make $target"
+    make -C "$ROOT" "$target" >&2
+  fi
+  [[ -x "$gateway" ]] || fail "gateway binary is not executable: $gateway"
+  [[ -x "$agent" ]] || fail "seller-agent binary is not executable: $agent"
+  printf '%s\n%s\n' "$gateway" "$agent"
+}
+
+api_get() {
+  local path="$1"
+  local out="$2"
+  local expected="${3:-200}"
+  local code
+  code="$(curl -sS -b "$COOKIE_FILE" -c "$COOKIE_FILE" -o "$out" -w '%{http_code}' --max-time 10 "$BASE_URL$path" || true)"
+  [[ "$code" == "$expected" ]] || fail "GET $path -> HTTP $code, expected $expected: $(tr -d '\n' <"$out" | head -c 500)"
+}
+
+api_post() {
+  local path="$1"
+  local payload="$2"
+  local out="$3"
+  local expected="${4:-200}"
+  local code
+  code="$(
+    curl -sS -b "$COOKIE_FILE" -c "$COOKIE_FILE" -o "$out" -w '%{http_code}' --max-time 10 \
+      "$BASE_URL$path" \
+      -H 'Content-Type: application/json' \
+      -d "$payload" || true
+  )"
+  [[ "$code" == "$expected" ]] || fail "POST $path -> HTTP $code, expected $expected: $(tr -d '\n' <"$out" | head -c 500)"
+}
+
+start_fake_upstream() {
+  python3 -u - "$UPSTREAM_PORT" >"$UPSTREAM_LOG" 2>&1 <<'PY' &
+import json
+import sys
+import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+PORT = int(sys.argv[1])
+MARKER = "SUBI_LOCAL_E2E_OK"
+
+class Handler(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+
+    def log_message(self, fmt, *args):
+        sys.stderr.write("%s - %s\n" % (self.address_string(), fmt % args))
+
+    def do_GET(self):
+        if self.path == "/health":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", "11")
+            self.end_headers()
+            self.wfile.write(b'{"ok":true}')
+            return
+        self.send_error(404)
+
+    def do_POST(self):
+        length = int(self.headers.get("Content-Length", "0") or "0")
+        raw = self.rfile.read(length)
+        try:
+            body = json.loads(raw or b"{}")
+        except Exception:
+            body = {}
+        if body.get("stream"):
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            for event, data in [
+                ("response.output_text.delta", {"type": "response.output_text.delta", "delta": MARKER}),
+                ("response.completed", {"type": "response.completed"}),
+            ]:
+                self.wfile.write(f"event: {event}\n".encode())
+                self.wfile.write(("data: " + json.dumps(data) + "\n\n").encode())
+                self.wfile.flush()
+            return
+        response = {
+            "id": "resp_subi_local_e2e",
+            "object": "response",
+            "created_at": int(time.time()),
+            "model": body.get("model", "subi-local-fake"),
+            "output": [
+                {
+                    "id": "msg_subi_local_e2e",
+                    "type": "message",
+                    "status": "completed",
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": MARKER}],
+                }
+            ],
+            "output_text": MARKER,
+        }
+        data = json.dumps(response, ensure_ascii=False).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("X-Subi-Upstream-Mode", "local-fake")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
+print(f"fake upstream listening on 127.0.0.1:{PORT}", flush=True)
+server.serve_forever()
+PY
+  UPSTREAM_PID=$!
+}
+
+need_cmd curl
+need_cmd python3
+need_cmd make
+
+if [[ -z "$GATEWAY_PORT" ]]; then
+  GATEWAY_PORT="$(free_port)"
+fi
+if [[ -z "$UPSTREAM_PORT" ]]; then
+  UPSTREAM_PORT="$(free_port)"
+fi
+BASE_URL="http://127.0.0.1:$GATEWAY_PORT"
+UPSTREAM_URL="http://127.0.0.1:$UPSTREAM_PORT"
+NODE_ID="seller-local-$(date +%s)-$$"
+EMAIL="subi-local-demo@subi.local"
+PASSWORD="password123"
+
+BINARIES="$(detect_binaries)"
+GATEWAY_BIN="$(printf '%s\n' "$BINARIES" | sed -n '1p')"
+SELLER_BIN="$(printf '%s\n' "$BINARIES" | sed -n '2p')"
+pass "binaries ready"
+
+start_fake_upstream
+wait_http "$UPSTREAM_URL/health" 15 || fail "fake upstream did not become healthy"
+pass "fake upstream ready on $UPSTREAM_URL"
+
+env \
+  SUBI_GATEWAY_ADDR="127.0.0.1:$GATEWAY_PORT" \
+  SUBI_DB_PATH="$WORK_DIR/subi.db" \
+  SUBI_WEB_DIR="$ROOT/web" \
+  SUBI_SESSION_COOKIE_NAME="subi_local_test_session" \
+  SUBI_SESSION_CONTEXT_ENABLED=true \
+  "$GATEWAY_BIN" >"$GATEWAY_LOG" 2>&1 &
+GATEWAY_PID=$!
+
+wait_http "$BASE_URL/health" 20 || fail "gateway did not become healthy"
+pass "gateway ready on $BASE_URL"
+
+api_post "/api/web/auth/register" "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}" "$WORK_DIR/register.json" 201
+pass "web account registered"
+
+api_post "/api/web/seller/nodes" "{\"node_id\":\"$NODE_ID\",\"provider\":\"http\",\"max_concurrency\":1}" "$WORK_DIR/seller-node.json" 201
+api_post "/api/web/seller/nodes/$NODE_ID/setup-token" '{}' "$WORK_DIR/setup-token.json" 201
+SETUP_TOKEN="$(json_get 'd["setup_token"]' <"$WORK_DIR/setup-token.json")"
+api_get "/api/v1/subi/seller/setup?token=$SETUP_TOKEN" "$WORK_DIR/seller-setup.json" 200
+NODE_TOKEN="$(json_get 'd["subi_seller_node_token"]' <"$WORK_DIR/seller-setup.json")"
+WS_URL="$(json_get 'd["subi_gateway_ws_url"]' <"$WORK_DIR/seller-setup.json")"
+pass "seller setup token redeemed"
+
+env \
+  SUBI_GATEWAY_WS_URL="$WS_URL" \
+  SUBI_SELLER_NODE_TOKEN="$NODE_TOKEN" \
+  SUBI_NODE_ID="$NODE_ID" \
+  SELLER_UPSTREAM_MODE="http" \
+  SELLER_WORKERS="1" \
+  SELLER_LOCAL_BASE_URL="$UPSTREAM_URL" \
+  SELLER_LOCAL_API_KEY="subi-local-fake-upstream-key" \
+  "$SELLER_BIN" >"$SELLER_LOG" 2>&1 &
+SELLER_PID=$!
+
+wait_log_contains "$SELLER_LOG" "seller-agent connected" 20 || fail "seller-agent did not connect to gateway"
+pass "seller-agent connected as $NODE_ID"
+
+api_post "/api/web/buyer/api-keys" '{"name":"Local one-click test"}' "$WORK_DIR/buyer-key.json" 201
+BUYER_KEY="$(json_get 'd["secret"]' <"$WORK_DIR/buyer-key.json")"
+api_post "/api/web/buyer/api-keys" '{"name":"Temporary revoke test"}' "$WORK_DIR/revoke-key.json" 201
+REVOKE_KEY_ID="$(json_get 'd["api_key"]["id"]' <"$WORK_DIR/revoke-key.json")"
+api_post "/api/web/buyer/api-keys/$REVOKE_KEY_ID/revoke" '{}' "$WORK_DIR/revoke-result.json" 200
+api_get "/api/web/buyer/api-keys" "$WORK_DIR/api-keys.json" 200
+REVOKED_COUNT="$(json_get 'sum(1 for k in d["api_keys"] if k.get("revoked_at"))' <"$WORK_DIR/api-keys.json")"
+[[ "$REVOKED_COUNT" -ge 1 ]] || fail "expected at least one revoked API key"
+pass "buyer API key create/list/revoke works"
+
+api_post "/api/web/buyer/credits/orders" '{"amount_credits":100}' "$WORK_DIR/credit-order.json" 201
+START_BALANCE="$(json_get 'd["wallet"]["balance_micros"]' <"$WORK_DIR/credit-order.json")"
+[[ "$START_BALANCE" == "100000000" ]] || fail "expected starting balance 100000000, got $START_BALANCE"
+pass "buyer mock recharge credited 100 Credits"
+
+curl -sS "$BASE_URL/buyer/" | grep -q "Credit ledger" || fail "buyer page does not include Credit ledger"
+curl -sS "$BASE_URL/buyer/" | grep -q "API keys" || fail "buyer page does not include API keys"
+curl -sS "$BASE_URL/seller/" | grep -q "Seller" || fail "seller page did not load"
+pass "buyer/seller web pages are served"
+
+RESPONSE_CODE="$(
+  curl -sS -D "$WORK_DIR/response.headers" -o "$WORK_DIR/response.json" -w '%{http_code}' --max-time 30 \
+    "$BASE_URL/v1/responses" \
+    -H "Authorization: Bearer $BUYER_KEY" \
+    -H 'Content-Type: application/json' \
+    -H 'x-session-id: local-oneclick' \
+    -d '{"model":"subi-local-fake","input":"Reply exactly: SUBI_LOCAL_E2E_OK","stream":false}' || true
+)"
+[[ "$RESPONSE_CODE" == "200" ]] || fail "buyer /v1/responses returned HTTP $RESPONSE_CODE: $(tr -d '\n' <"$WORK_DIR/response.json" | head -c 500)"
+grep -q "SUBI_LOCAL_E2E_OK" "$WORK_DIR/response.json" || fail "buyer response did not contain SUBI_LOCAL_E2E_OK"
+grep -qi "X-Subi-Seller-Node: $NODE_ID" "$WORK_DIR/response.headers" || fail "response did not include expected X-Subi-Seller-Node"
+pass "buyer -> gateway -> seller-agent -> fake upstream response succeeded"
+
+api_get "/api/web/buyer/balance" "$WORK_DIR/balance-after.json" 200
+api_get "/api/web/buyer/usage?limit=20" "$WORK_DIR/usage.json" 200
+api_get "/api/web/buyer/credits/ledger?limit=20" "$WORK_DIR/ledger.json" 200
+api_get "/api/web/seller/earnings" "$WORK_DIR/earnings.json" 200
+api_get "/api/web/seller/activity?limit=20" "$WORK_DIR/seller-activity.json" 200
+
+BALANCE_AFTER="$(json_get 'd["wallet"]["balance_micros"]' <"$WORK_DIR/balance-after.json")"
+USAGE_COUNT="$(json_get 'len(d["usage"])' <"$WORK_DIR/usage.json")"
+LEDGER_COUNT="$(json_get 'len(d["ledger"])' <"$WORK_DIR/ledger.json")"
+DEBIT_COUNT="$(json_get 'sum(1 for e in d["ledger"] if e.get("type") == "debit")' <"$WORK_DIR/ledger.json")"
+SELLER_BALANCE="$(json_get 'd["earnings"]["balance_micros"]' <"$WORK_DIR/earnings.json")"
+SELLER_ACTIVITY_COUNT="$(json_get 'len(d["activity"])' <"$WORK_DIR/seller-activity.json")"
+
+[[ "$BALANCE_AFTER" == "99000000" ]] || fail "expected buyer balance 99000000 after one request, got $BALANCE_AFTER"
+[[ "$USAGE_COUNT" -ge 1 ]] || fail "expected at least one buyer usage row"
+[[ "$LEDGER_COUNT" -ge 2 ]] || fail "expected recharge and debit ledger entries"
+[[ "$DEBIT_COUNT" -ge 1 ]] || fail "expected at least one debit ledger entry"
+[[ "$SELLER_BALANCE" == "800000" ]] || fail "expected seller earnings balance 800000, got $SELLER_BALANCE"
+[[ "$SELLER_ACTIVITY_COUNT" -ge 1 ]] || fail "expected seller activity row"
+pass "credit debit, buyer usage, seller earnings, and ledger all match"
+
+printf '\nSubi local one-click test passed.\n'
+printf 'Buyer page:  %s/buyer/\n' "$BASE_URL"
+printf 'Seller page: %s/seller/\n' "$BASE_URL"
+if [[ "$KEEP" == "1" ]]; then
+  printf 'DB path:     %s/subi.db\n' "$WORK_DIR"
+  printf 'Logs:        %s\n' "$WORK_DIR"
+else
+  printf 'Temp DB/logs are cleaned after a successful run.\n'
+  printf 'Set SUBI_LOCAL_TEST_KEEP=1 to keep logs and DB for inspection.\n'
+fi

@@ -6,9 +6,12 @@ const sellerState = {
   activeProvider: "codex",
   earnings: null,
   activity: [],
+  authMode: "login",
+  refreshing: false,
 };
 
 const creditMicros = 1_000_000;
+const refreshIntervalMS = 5000;
 
 function formatCredits(micros) {
   const credits = Number(micros || 0) / creditMicros;
@@ -169,6 +172,104 @@ function showToast(message) {
   showToast.timer = window.setTimeout(() => toast.classList.remove("show"), 1500);
 }
 
+function ensureAuthModal() {
+  if (document.querySelector("#auth-modal")) {
+    return;
+  }
+  document.body.insertAdjacentHTML(
+    "beforeend",
+    `
+      <div class="auth-modal" id="auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-modal-title" hidden>
+        <div class="auth-backdrop" data-auth-close></div>
+        <section class="auth-card">
+          <button class="auth-close" type="button" data-auth-close aria-label="关闭">关闭</button>
+          <div class="auth-heading">
+            <span class="brand-mark">S</span>
+            <div>
+              <h2 id="auth-modal-title">登录 Subi</h2>
+              <p id="auth-modal-copy">管理卖家节点、安装命令和收益流水。</p>
+            </div>
+          </div>
+          <div class="auth-tabs" role="tablist" aria-label="登录模式">
+            <button class="active" type="button" role="tab" aria-selected="true" data-auth-mode="login">登录</button>
+            <button type="button" role="tab" aria-selected="false" data-auth-mode="register">注册</button>
+          </div>
+          <div class="auth-provider-grid">
+            <button class="auth-provider" type="button" data-auth-disabled>
+              <span>G</span>
+              Google
+            </button>
+            <button class="auth-provider" type="button" data-auth-disabled>
+              <span>A</span>
+              Apple
+            </button>
+          </div>
+          <button class="auth-provider auth-provider-wide" type="button" data-auth-disabled>
+            <span>@</span>
+            邮箱验证码登录
+          </button>
+          <div class="auth-divider"><span>邮箱和密码</span></div>
+          <form class="auth-form" id="auth-form">
+            <label>
+              <span>邮箱</span>
+              <input id="auth-email" name="email" type="email" autocomplete="email" placeholder="you@company.com" required />
+            </label>
+            <label>
+              <span>密码</span>
+              <input id="auth-password" name="password" type="password" autocomplete="current-password" minlength="8" placeholder="至少 8 位" required />
+            </label>
+            <p class="auth-error" id="auth-error" role="alert"></p>
+            <button class="auth-submit" id="auth-submit" type="submit">登录</button>
+          </form>
+        </section>
+      </div>
+    `,
+  );
+  document.querySelector("#auth-form")?.addEventListener("submit", handleAuthSubmit);
+}
+
+function setAuthMode(mode) {
+  sellerState.authMode = mode === "register" ? "register" : "login";
+  document.querySelectorAll("[data-auth-mode]").forEach((button) => {
+    const active = button.dataset.authMode === sellerState.authMode;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+  });
+  setText("#auth-modal-title", sellerState.authMode === "register" ? "创建 Subi 账号" : "登录 Subi");
+  setText(
+    "#auth-modal-copy",
+    sellerState.authMode === "register" ? "使用邮箱和密码创建买家/卖家通用账号。" : "管理卖家节点、安装命令和收益流水。",
+  );
+  setText("#auth-submit", sellerState.authMode === "register" ? "创建账号" : "登录");
+  setText("#auth-error", "");
+  const passwordInput = document.querySelector("#auth-password");
+  if (passwordInput) {
+    passwordInput.autocomplete = sellerState.authMode === "register" ? "new-password" : "current-password";
+  }
+}
+
+function openAuthModal(mode = "login") {
+  ensureAuthModal();
+  setAuthMode(mode);
+  const modal = document.querySelector("#auth-modal");
+  if (!modal) {
+    return;
+  }
+  modal.hidden = false;
+  document.body.classList.add("auth-lock");
+  window.setTimeout(() => document.querySelector("#auth-email")?.focus(), 0);
+}
+
+function closeAuthModal() {
+  const modal = document.querySelector("#auth-modal");
+  if (!modal) {
+    return;
+  }
+  modal.hidden = true;
+  document.body.classList.remove("auth-lock");
+  setText("#auth-error", "");
+}
+
 async function copyText(value) {
   try {
     await navigator.clipboard.writeText(value);
@@ -184,6 +285,24 @@ async function copyText(value) {
 }
 
 document.addEventListener("click", (event) => {
+  const authClose = event.target.closest("[data-auth-close]");
+  if (authClose) {
+    closeAuthModal();
+    return;
+  }
+
+  const authModeButton = event.target.closest("[data-auth-mode]");
+  if (authModeButton) {
+    setAuthMode(authModeButton.dataset.authMode);
+    return;
+  }
+
+  const authDisabled = event.target.closest("[data-auth-disabled]");
+  if (authDisabled) {
+    showToast("该登录方式稍后开放");
+    return;
+  }
+
   const providerTab = event.target.closest("[data-provider]");
   if (providerTab) {
     document.querySelectorAll("[data-provider]").forEach((tab) => {
@@ -202,7 +321,7 @@ document.addEventListener("click", (event) => {
     return;
   }
 
-  const authButton = event.target.closest(".login-btn");
+  const authButton = event.target.closest(".login-btn, .mobile-nav button");
   if (authButton) {
     handleAuthAction();
     return;
@@ -211,6 +330,12 @@ document.addEventListener("click", (event) => {
   const startButton = event.target.closest("#start-onboarding");
   if (startButton) {
     startSellerOnboarding();
+    return;
+  }
+
+  const refreshButton = event.target.closest("#refresh-seller");
+  if (refreshButton) {
+    refreshSellerDataAndRender({ toast: true });
     return;
   }
 
@@ -328,15 +453,7 @@ async function loadSellerAccount() {
   try {
     const payload = await api("/api/web/auth/me");
     sellerState.user = payload.user;
-    const [nodesPayload, earningsPayload, activityPayload] = await Promise.all([
-      api("/api/web/seller/nodes"),
-      api("/api/web/seller/earnings"),
-      api("/api/web/seller/activity?limit=20"),
-    ]);
-    sellerState.nodes = nodesPayload.nodes || [];
-    sellerState.activeNode = sellerState.nodes[0] || null;
-    sellerState.earnings = earningsPayload.earnings || null;
-    sellerState.activity = activityPayload.activity || [];
+    await refreshSellerData();
   } catch (error) {
     if (error.status !== 401) {
       showToast(error.message);
@@ -351,31 +468,89 @@ async function loadSellerAccount() {
   renderAll();
 }
 
-async function loginOrRegister() {
-  const email = window.prompt("邮箱");
-  if (!email) {
+async function refreshSellerData() {
+  if (!sellerState.user || sellerState.refreshing) {
     return;
   }
-  const password = window.prompt("密码，至少 8 位");
-  if (!password) {
+  sellerState.refreshing = true;
+  try {
+    const [nodesPayload, earningsPayload, activityPayload] = await Promise.all([
+      api("/api/web/seller/nodes"),
+      api("/api/web/seller/earnings"),
+      api("/api/web/seller/activity?limit=20"),
+    ]);
+    sellerState.nodes = nodesPayload.nodes || [];
+    sellerState.activeNode = sellerState.nodes[0] || null;
+    sellerState.earnings = earningsPayload.earnings || null;
+    sellerState.activity = activityPayload.activity || [];
+  } finally {
+    sellerState.refreshing = false;
+  }
+}
+
+async function refreshSellerDataAndRender({ toast = false } = {}) {
+  if (!sellerState.user) {
+    if (toast) {
+      showToast("请先登录");
+    }
     return;
   }
   try {
-    await api("/api/web/auth/login", {
-      method: "POST",
-      body: { email, password },
-    });
-  } catch (error) {
-    if (error.status !== 401) {
-      throw error;
+    await refreshSellerData();
+    renderAll();
+    if (toast) {
+      showToast("已刷新");
     }
-    await api("/api/web/auth/register", {
+  } catch (error) {
+    if (toast) {
+      showToast(error.message);
+    }
+  }
+}
+
+async function handleAuthSubmit(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const submitButton = document.querySelector("#auth-submit");
+  const email = String(form.email.value || "").trim();
+  const password = String(form.password.value || "");
+  if (!email || !password) {
+    setText("#auth-error", "请填写邮箱和密码。");
+    return;
+  }
+  if (password.length < 8) {
+    setText("#auth-error", "密码至少 8 位。");
+    return;
+  }
+  setText("#auth-error", "");
+  if (submitButton) {
+    submitButton.disabled = true;
+  }
+  try {
+    await api(sellerState.authMode === "register" ? "/api/web/auth/register" : "/api/web/auth/login", {
       method: "POST",
       body: { email, password },
     });
+    closeAuthModal();
+    showToast(sellerState.authMode === "register" ? "账号已创建" : "已登录");
+    await loadSellerAccount();
+  } catch (error) {
+    if (sellerState.authMode === "login" && error.status === 401) {
+      setText("#auth-error", "邮箱或密码不正确。");
+    } else if (sellerState.authMode === "register" && error.status === 409) {
+      setText("#auth-error", "账号已存在，请切换到登录。");
+    } else {
+      setText("#auth-error", error.message);
+    }
+  } finally {
+    if (submitButton) {
+      submitButton.disabled = false;
+    }
   }
-  showToast("已登录");
-  await loadSellerAccount();
+}
+
+async function loginOrRegister(mode = "login") {
+  openAuthModal(mode);
 }
 
 async function logout() {
@@ -395,7 +570,7 @@ async function handleAuthAction() {
     if (sellerState.user) {
       await logout();
     } else {
-      await loginOrRegister();
+      openAuthModal("login");
     }
   } catch (error) {
     showToast(error.message);
@@ -432,10 +607,8 @@ async function ensureSellerNode() {
 async function startSellerOnboarding() {
   try {
     if (!sellerState.user) {
-      await loginOrRegister();
-      if (!sellerState.user) {
-        return;
-      }
+      openAuthModal("login");
+      return;
     }
     const node = await ensureSellerNode();
     sellerState.setup = await api(`/api/web/seller/nodes/${encodeURIComponent(node.node_id)}/setup-token`, {
@@ -839,6 +1012,19 @@ function initNetworkMap() {
   });
 }
 
+ensureAuthModal();
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    closeAuthModal();
+  }
+});
+
 renderAll();
 initNetworkMap();
 loadSellerAccount();
+
+window.setInterval(() => {
+  if (document.visibilityState === "visible") {
+    refreshSellerDataAndRender();
+  }
+}, refreshIntervalMS);

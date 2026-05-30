@@ -8,22 +8,35 @@
   </head>
   <body>
     <header class="topbar">
-      <a class="brand" href="#dashboard" aria-label="Subi Buyer Console">
-        <span class="brand-mark">S</span>
-        <span>Subi</span>
-      </a>
-      <nav class="nav" aria-label="Buyer navigation">
-        <a href="#dashboard">Dashboard</a>
-        <a href="#credits">Credits</a>
-        <a href="#setup">Setup</a>
-        <a href="#usage">Usage</a>
-      </nav>
-      <div class="top-actions">
-      <div class="top-balance" id="top-balance">
-        <i data-lucide="wallet" aria-hidden="true"></i>
-        <span>-- Credits</span>
-      </div>
-      <button class="btn btn-secondary compact" id="auth-action" type="button">Login</button>
+      <div class="topbar-inner">
+        <div class="brand-cluster">
+          <a class="brand" href="#dashboard" aria-label="Subi Buyer Console">
+            <span class="brand-mark">S</span>
+            <span>Subi</span>
+          </a>
+          <div class="role-switcher" aria-label="Switch Subi console">
+            <a class="active" href="./index.html">Buyer</a>
+            <a href="../seller-market/index.html">Seller</a>
+          </div>
+        </div>
+        <nav class="nav" aria-label="Buyer navigation">
+          <a href="#dashboard">Dashboard</a>
+          <a href="#credits">Credits</a>
+          <a href="#setup">Setup</a>
+          <a href="#keys">Keys</a>
+          <a href="#usage">Usage</a>
+        </nav>
+        <div class="top-actions">
+          <div class="top-balance" id="top-balance">
+            <i data-lucide="wallet" aria-hidden="true"></i>
+            <span>-- Credits</span>
+          </div>
+          <button class="btn btn-secondary compact" id="refresh-data" type="button">
+            <i data-lucide="refresh-cw" aria-hidden="true"></i>
+            Refresh
+          </button>
+          <button class="btn btn-secondary compact" id="auth-action" type="button">Sign in</button>
+        </div>
       </div>
     </header>
 
@@ -55,7 +68,7 @@
           <div class="balance-main">
             <span>Your Credits</span>
             <strong id="credit-balance">--</strong>
-            <p id="credit-estimate">Login to load your balance.</p>
+            <p id="credit-estimate">Sign in to load your balance.</p>
           </div>
           <div class="balance-row">
             <span>Today spend</span>
@@ -85,7 +98,7 @@
         <div class="copy-grid access-grid">
           <label class="copy-field">
             <span>SUBI BUYER API KEY</span>
-            <input id="api-key" readonly type="password" value="Login to create a key" />
+            <input id="api-key" readonly type="password" value="Sign in to create a key" />
             <button class="icon-btn" type="button" data-copy-target="api-key" aria-label="Copy Subi buyer API key">
               <i data-lucide="copy" aria-hidden="true"></i>
             </button>
@@ -104,6 +117,16 @@
               <i data-lucide="copy" aria-hidden="true"></i>
             </button>
           </label>
+        </div>
+        <div class="access-actions">
+          <button class="btn btn-primary compact" type="button" id="create-key">
+            <i data-lucide="key-round" aria-hidden="true"></i>
+            New key
+          </button>
+          <button class="btn btn-secondary compact" type="button" id="revoke-key">
+            <i data-lucide="ban" aria-hidden="true"></i>
+            Revoke current
+          </button>
         </div>
       </section>
 
@@ -158,6 +181,33 @@
         </div>
       </section>
 
+      <section id="keys" class="panel" aria-labelledby="keys-title">
+        <div class="panel-heading">
+          <div>
+            <h2 id="keys-title">API keys</h2>
+          </div>
+          <span class="muted-pill" id="active-key-pill">No active key</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Prefix</th>
+                <th>Status</th>
+                <th>Last used</th>
+                <th>Created</th>
+              </tr>
+            </thead>
+            <tbody id="api-keys-table-body">
+              <tr>
+                <td colspan="5">Sign in to load API keys.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       <section id="setup" class="panel setup-panel" aria-labelledby="setup-title">
         <div class="panel-heading">
           <div>
@@ -199,7 +249,7 @@
               <i data-lucide="shield-check" aria-hidden="true"></i>
               <div>
                 <strong>Buyer Doctor</strong>
-              <span id="doctor-status">Waiting for login</span>
+              <span id="doctor-status">Waiting for sign in</span>
               </div>
             </div>
             <ul id="doctor-list" class="check-list">
@@ -217,9 +267,9 @@
           <div>
             <h2 id="usage-title">Credit activity</h2>
           </div>
-          <button class="btn btn-secondary compact" type="button">
-            <i data-lucide="download" aria-hidden="true"></i>
-            Export
+          <button class="btn btn-secondary compact" id="refresh-usage" type="button">
+            <i data-lucide="refresh-cw" aria-hidden="true"></i>
+            Refresh
           </button>
         </div>
         <div class="table-wrap">
@@ -235,10 +285,36 @@
             </thead>
             <tbody id="usage-table-body">
               <tr>
-                <td colspan="5">Login to load usage.</td>
+                <td colspan="5">Sign in to load usage.</td>
               </tr>
             </tbody>
           </table>
+        </div>
+        <div class="ledger-block">
+          <div class="panel-heading compact-heading">
+            <div>
+              <h2>Credit ledger</h2>
+            </div>
+            <span class="muted-pill">Balance history</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Type</th>
+                  <th>Amount</th>
+                  <th>Balance</th>
+                  <th>Request</th>
+                </tr>
+              </thead>
+              <tbody id="ledger-table-body">
+                <tr>
+                  <td colspan="5">Sign in to load ledger.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </section>
     </main>

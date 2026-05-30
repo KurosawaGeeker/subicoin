@@ -86,6 +86,26 @@ make test
 - 协议兼容转换
 - SQLite 账号、节点接入、Credit 账本和 seller 收益账本
 
+本地一键链路验收：
+
+```bash
+make test-local-oneclick
+```
+
+这个脚本会启动临时 Gateway、临时 SQLite、临时 Seller Agent 和本地 fake Responses 上游，不会调用真实 Codex，也不会消耗 Codex 订阅。它验证：
+
+- Buyer `/v1/responses` 请求能穿过 Gateway 到 Seller Agent
+- 成功请求会扣 Buyer Credit
+- Usage 和 Credit ledger 会记录消耗
+- Seller earnings 和 activity 会记录收益
+- Buyer / Seller Web 静态页面能正常加载
+
+默认跑完会清理临时 DB 和日志；需要保留现场时：
+
+```bash
+SUBI_LOCAL_TEST_KEEP=1 make test-local-oneclick
+```
+
 ## Gateway 启动
 
 ### 旧实验模式
@@ -266,6 +286,7 @@ codex
 - Buyer Credit 余额和扣费账本
 - 固定价格的 Request Fill 账本
 - Seller 收益账本
+- Buyer Web 的 API key 管理、Usage 和 Credit ledger 展示
 
 ## 当前未完成
 
@@ -273,7 +294,7 @@ codex
 
 - 真实加密货币充值 / 提现
 - Seller 提现
-- 完整 Web 登录页面接真实接口
+- 生产级支付、风控、客服和审计后台
 - GUI 客户端
 - 多 Gateway 实例共享状态
 - 生产级调度、风控、健康分
