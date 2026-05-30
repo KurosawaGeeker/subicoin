@@ -65,8 +65,7 @@ function oneShotInstallCommand() {
   --install-dir ~/.subi/seller-canary \\
   --service-name subi-seller-canary`
       : "";
-  return `# 一键安装会自动下载当前平台的 seller-agent，并写入本机长连接配置：
-${command}${canaryFlags}`;
+  return `${command}${canaryFlags}`;
 }
 
 function providerContent() {
@@ -577,10 +576,21 @@ async function handleAuthAction() {
   }
 }
 
-async function ensureSellerNode() {
-  if (sellerState.activeNode) {
-    return sellerState.activeNode;
+function onboardingProvider() {
+  if (sellerState.activeProvider === "http") {
+    return "http";
   }
+  return "codex-app-server";
+}
+
+async function ensureSellerNode() {
+  const provider = onboardingProvider();
+  const matchingNode = sellerState.nodes.find((node) => node.provider === provider);
+  if (matchingNode) {
+    sellerState.activeNode = matchingNode;
+    return matchingNode;
+  }
+
   const nodeID = defaultNodeID();
   let payload;
   try {
@@ -588,7 +598,7 @@ async function ensureSellerNode() {
       method: "POST",
       body: {
         node_id: nodeID,
-        provider: "codex-app-server",
+        provider,
         max_concurrency: 1,
       },
     });
