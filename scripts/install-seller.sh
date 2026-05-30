@@ -18,7 +18,7 @@ done
 
 if [[ -z "$GATEWAY" ]]; then
   echo "ERROR: --gateway is required" >&2
-  echo "Usage: ./scripts/install-seller.sh --gateway https://api.subi.example --setup-token subi_setup_xxx --agent-path ./dist/seller-agent" >&2
+  echo "Usage: ./scripts/install-seller.sh --gateway https://api.subi.example --setup-token subi_setup_xxx [--agent-path ./dist/seller-agent]" >&2
   exit 2
 fi
 

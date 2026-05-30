@@ -5,13 +5,15 @@ GATEWAY=""
 SETUP_TOKEN=""
 AGENT_PATH=""
 INSTALL_DIR="${SUBI_SELLER_INSTALL_DIR:-$HOME/.subi/seller}"
+SERVICE_NAME="${SUBI_SELLER_SERVICE_NAME:-subi-seller-agent}"
 
 usage() {
   cat >&2 <<'EOF'
 Usage:
-  install-seller.sh --gateway https://api.subi.example --setup-token subi_setup_xxx [--agent-path ./dist/seller-agent]
+  install-seller.sh --gateway https://api.subi.example --setup-token subi_setup_xxx [--agent-path ./dist/seller-agent] [--install-dir ~/.subi/seller] [--service-name subi-seller-agent]
 
-The setup token is exchanged once for this seller node's local config.
+The setup token is exchanged once for this seller node's local config. If
+--agent-path is omitted, the installer downloads seller-agent from the gateway.
 EOF
 }
 
@@ -33,6 +35,10 @@ while [[ $# -gt 0 ]]; do
       INSTALL_DIR="${2:-}"
       shift 2
       ;;
+    --service-name)
+      SERVICE_NAME="${2:-}"
+      shift 2
+      ;;
     -h|--help)
       usage
       exit 0
@@ -47,6 +53,8 @@ done
 
 [[ -n "$GATEWAY" ]] || { echo "ERROR: --gateway is required" >&2; exit 2; }
 [[ -n "$SETUP_TOKEN" ]] || { echo "ERROR: --setup-token is required" >&2; exit 2; }
+[[ -n "$INSTALL_DIR" ]] || { echo "ERROR: --install-dir is required" >&2; exit 2; }
+[[ -n "$SERVICE_NAME" ]] || { echo "ERROR: --service-name is required" >&2; exit 2; }
 command -v curl >/dev/null 2>&1 || { echo "ERROR: curl is required" >&2; exit 2; }
 command -v python3 >/dev/null 2>&1 || { echo "ERROR: python3 is required" >&2; exit 2; }
 
@@ -115,16 +123,31 @@ elif [[ "$(uname -s)" == "Linux" && "$(uname -m)" == "x86_64" && -x "./dist/sell
 elif [[ -x "./dist/seller-agent" ]]; then
   cp "./dist/seller-agent" "$INSTALL_DIR/seller-agent"
 else
-  echo "ERROR: seller-agent binary was not found." >&2
-  echo "Build it first, then rerun with --agent-path ./dist/seller-agent-<os>-<arch>." >&2
-  exit 2
+  case "$(uname -s)-$(uname -m)" in
+    Darwin-arm64)
+      AGENT_NAME="seller-agent-darwin-arm64"
+      ;;
+    Linux-x86_64|Linux-amd64)
+      AGENT_NAME="seller-agent-linux-amd64"
+      ;;
+    *)
+      echo "ERROR: unsupported platform for automatic seller-agent download: $(uname -s) $(uname -m)" >&2
+      echo "Build seller-agent manually and rerun with --agent-path ./dist/seller-agent-<os>-<arch>." >&2
+      exit 2
+      ;;
+  esac
+  echo "Downloading $AGENT_NAME from $GATEWAY ..."
+  AGENT_TMP="$INSTALL_DIR/seller-agent.download"
+  rm -f "$AGENT_TMP"
+  curl -fsSL "$GATEWAY/api/v1/subi/seller/downloads/$AGENT_NAME" -o "$AGENT_TMP"
+  mv "$AGENT_TMP" "$INSTALL_DIR/seller-agent"
 fi
 chmod +x "$INSTALL_DIR/seller-agent"
 
 mkdir -p "$INSTALL_DIR/work"
 
 if [[ "$(uname -s)" == "Darwin" ]]; then
-  PLIST="$HOME/Library/LaunchAgents/network.subi.seller-agent.plist"
+  PLIST="$HOME/Library/LaunchAgents/network.subi.$SERVICE_NAME.plist"
   mkdir -p "$HOME/Library/LaunchAgents"
   cat >"$PLIST" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -132,7 +155,7 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>network.subi.seller-agent</string>
+  <string>network.subi.$SERVICE_NAME</string>
   <key>ProgramArguments</key>
   <array>
     <string>/bin/zsh</string>
@@ -152,7 +175,7 @@ EOF
 elif command -v systemctl >/dev/null 2>&1; then
   USER_SYSTEMD="$HOME/.config/systemd/user"
   mkdir -p "$USER_SYSTEMD"
-  cat >"$USER_SYSTEMD/subi-seller-agent.service" <<EOF
+  cat >"$USER_SYSTEMD/$SERVICE_NAME.service" <<EOF
 [Unit]
 Description=Subi Seller Agent
 After=network-online.target
@@ -168,7 +191,7 @@ RestartSec=3
 WantedBy=default.target
 EOF
   systemctl --user daemon-reload
-  systemctl --user enable --now subi-seller-agent
+  systemctl --user enable --now "$SERVICE_NAME"
   echo "Subi seller-agent installed and started with systemd --user."
 else
   nohup /bin/sh -lc "set -a; . '$INSTALL_DIR/config.env'; set +a; exec '$INSTALL_DIR/seller-agent'" >>"$INSTALL_DIR/seller-agent.log" 2>&1 &

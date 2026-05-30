@@ -167,6 +167,7 @@ POST /api/web/seller/nodes/:node_id/setup-token
 
 GET  /api/v1/subi/seller/setup?token=...
 GET  /api/v1/subi/seller/install.sh
+GET  /api/v1/subi/seller/downloads/:binary
 ```
 
 如果需要在账号模式下继续兼容旧实验 key：
@@ -215,15 +216,24 @@ export SUBI_RESERVE_MICROS=50000
 ```bash
 curl -fsSL https://<gateway-host>/api/v1/subi/seller/install.sh | bash -s -- \
   --gateway https://<gateway-host> \
+  --setup-token <subi_setup_xxx>
+```
+
+如果同一台机器已经跑着 main seller-agent，要给 canary 单独安装目录和服务名，避免覆盖现有 launchd/systemd 服务：
+
+```bash
+curl -fsSL http://13.230.32.216:18081/api/v1/subi/seller/install.sh | bash -s -- \
+  --gateway http://13.230.32.216:18081 \
   --setup-token <subi_setup_xxx> \
-  --agent-path ./dist/seller-agent-darwin-arm64
+  --install-dir ~/.subi/seller-canary \
+  --service-name subi-seller-canary
 ```
 
 安装脚本会：
 
 - 调用 `GET /api/v1/subi/seller/setup?token=...`
 - 写入 `~/.subi/seller/config.env`
-- 安装 `seller-agent`
+- 未传 `--agent-path` 时自动下载当前平台的 `seller-agent`
 - macOS 使用 launchd 启动
 - Linux 使用 `systemd --user` 启动
 - 无 systemd 时 fallback 到 `nohup`

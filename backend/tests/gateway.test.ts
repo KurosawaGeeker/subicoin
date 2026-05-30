@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { mkdir, rm } from "node:fs/promises";
 import { createGatewayServer, resetGatewayRegistryForTests, type GatewayConfig } from "../src/gateway";
 import { decodeEnvelope, sendEnvelope, subiEnvelopeAgentHello, subiEnvelopeRequestStart, subiEnvelopeResponseChunk, subiEnvelopeResponseEnd, subiEnvelopeResponseStart, type JSONSocket, type SubiEnvelope } from "../src/service/p2p";
 import { SubiSessionStore } from "../src/service/session";
@@ -7,10 +8,12 @@ import { delay } from "../src/utils";
 
 const servers: Bun.Server<any>[] = [];
 const stores: Store[] = [];
+const cleanupPaths: string[] = [];
 
-afterEach(() => {
+afterEach(async () => {
   for (const server of servers.splice(0)) server.stop(true);
   for (const store of stores.splice(0)) store.close();
+  for (const path of cleanupPaths.splice(0)) await rm(path, { force: true, recursive: true });
   resetGatewayRegistryForTests();
 });
 
@@ -138,6 +141,27 @@ describe("Gateway", () => {
     expect(body).toContain("insufficient credits");
     const balance = await getJSON(`${h.baseURL}/api/web/buyer/balance`, 200, register.cookie);
     expect(balance.json.wallet.balance_micros).toBe(0);
+  });
+
+  test("serves seller installer and agent downloads", async () => {
+    const h = newGatewayTestHarness(true);
+    await mkdir("downloads", { recursive: true });
+    cleanupPaths.push("downloads/seller-agent");
+    await Bun.write("downloads/seller-agent", "seller-binary");
+
+    const installResp = await fetch(`${h.baseURL}/api/v1/subi/seller/install.sh`);
+    const installScript = await installResp.text();
+    expect(installResp.status, installScript).toBe(200);
+    expect(installScript).toContain("--service-name");
+
+    const downloadResp = await fetch(`${h.baseURL}/api/v1/subi/seller/downloads/seller-agent`);
+    const downloadBody = await downloadResp.text();
+    expect(downloadResp.status, downloadBody).toBe(200);
+    expect(downloadResp.headers.get("Content-Type")).toBe("application/octet-stream");
+    expect(downloadBody).toBe("seller-binary");
+
+    const missingResp = await fetch(`${h.baseURL}/api/v1/subi/seller/downloads/not-allowed`);
+    expect(missingResp.status).toBe(404);
   });
 });
 

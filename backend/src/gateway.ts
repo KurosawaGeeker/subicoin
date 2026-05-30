@@ -152,6 +152,7 @@ async function handleGatewayRequest(req: Request, cfg: GatewayConfig): Promise<R
   if (url.pathname.startsWith("/api/web/seller/")) return handleWebSeller(req, cfg);
   if (url.pathname === "/api/v1/subi/seller/setup") return handleSellerSetup(req, cfg);
   if (url.pathname === "/api/v1/subi/seller/install.sh") return handleSellerInstallScript(req);
+  if (url.pathname.startsWith("/api/v1/subi/seller/downloads/")) return handleSellerDownload(req);
   return handleBuyerRequest(req, cfg);
 }
 
@@ -629,7 +630,15 @@ function handleSellerSetup(req: Request, cfg: GatewayConfig): Response {
 
 async function handleSellerInstallScript(req: Request): Promise<Response> {
   if (req.method !== "GET") return apiError(405, "method not allowed");
-  const candidates = ["backend/cmd/subi-gateway/assets/install-seller.sh", "scripts/install-seller.sh"];
+  const candidates = [
+    "cmd/subi-gateway/assets/install-seller.sh",
+    "backend/cmd/subi-gateway/assets/install-seller.sh",
+    "../backend/cmd/subi-gateway/assets/install-seller.sh",
+    "scripts/install-seller.sh",
+    "../scripts/install-seller.sh",
+    "/opt/subi/scripts/install-seller.sh",
+    "/opt/subi-canary/scripts/install-seller.sh",
+  ];
   for (const path of candidates) {
     const file = Bun.file(path);
     if (await file.exists()) {
@@ -639,6 +648,33 @@ async function handleSellerInstallScript(req: Request): Promise<Response> {
   return new Response("#!/usr/bin/env bash\nset -euo pipefail\necho 'seller install script is not packaged'\n", {
     headers: { "Content-Type": "text/x-shellscript; charset=utf-8" },
   });
+}
+
+async function handleSellerDownload(req: Request): Promise<Response> {
+  if (req.method !== "GET") return apiError(405, "method not allowed");
+  const name = decodeURIComponent(new URL(req.url).pathname.split("/").pop() || "");
+  const allowed = new Set(["seller-agent-darwin-arm64", "seller-agent-linux-amd64", "seller-agent"]);
+  if (!allowed.has(name)) return apiError(404, "seller download not found");
+  const candidates = [
+    `downloads/${name}`,
+    `dist/${name}`,
+    `../dist/${name}`,
+    `/opt/subi/dist/${name}`,
+    `/opt/subi-canary/dist/${name}`,
+  ];
+  for (const path of candidates) {
+    const file = Bun.file(path);
+    if (await file.exists()) {
+      return new Response(file, {
+        headers: {
+          "Content-Type": "application/octet-stream",
+          "Content-Disposition": `attachment; filename="${name}"`,
+          "Cache-Control": "no-store",
+        },
+      });
+    }
+  }
+  return apiError(404, "seller download not found");
 }
 
 function requireWebUser(req: Request, cfg: GatewayConfig): User {

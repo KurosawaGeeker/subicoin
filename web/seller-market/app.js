@@ -54,9 +54,24 @@ function currentInstallCommand() {
   return "# 点击“开始接入”生成一次性 setup token 和安装命令";
 }
 
+function oneShotInstallCommand() {
+  const command = currentInstallCommand();
+  if (command.startsWith("#")) {
+    return command;
+  }
+  const canaryFlags =
+    window.location.port === "18081"
+      ? ` \\
+  --install-dir ~/.subi/seller-canary \\
+  --service-name subi-seller-canary`
+      : "";
+  return `# 一键安装会自动下载当前平台的 seller-agent，并写入本机长连接配置：
+${command}${canaryFlags}`;
+}
+
 function providerContent() {
   const nodeID = sellerState.activeNode?.node_id || defaultNodeID();
-  const installCommand = currentInstallCommand();
+  const installCommand = oneShotInstallCommand();
   return {
     codex: {
       title: "Codex 订阅",

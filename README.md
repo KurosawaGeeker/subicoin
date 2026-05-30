@@ -191,6 +191,7 @@ POST /api/web/seller/nodes
 POST /api/web/seller/nodes/:node_id/setup-token
 GET  /api/v1/subi/seller/setup?token=...
 GET  /api/v1/subi/seller/install.sh
+GET  /api/v1/subi/seller/downloads/:binary
 ```
 
 Set `SUBI_DEV_STATIC_KEYS=true` only when you need to keep the old
@@ -254,13 +255,25 @@ The seller dashboard creates a setup token and shows a one-command installer:
 ```bash
 curl -fsSL https://<gateway-host>/api/v1/subi/seller/install.sh | bash -s -- \
   --gateway https://<gateway-host> \
+  --setup-token <subi_setup_xxx>
+```
+
+If the same machine already runs a main seller-agent, install canary into a
+separate directory and service name so launchd/systemd does not replace the
+main node:
+
+```bash
+curl -fsSL http://13.230.32.216:18081/api/v1/subi/seller/install.sh | bash -s -- \
+  --gateway http://13.230.32.216:18081 \
   --setup-token <subi_setup_xxx> \
-  --agent-path ./dist/seller-agent-darwin-arm64
+  --install-dir ~/.subi/seller-canary \
+  --service-name subi-seller-canary
 ```
 
 The installer exchanges the setup token once, writes
-`~/.subi/seller/config.env`, installs `seller-agent`, and starts it with
-launchd on macOS or `systemd --user` on Linux.
+`~/.subi/seller/config.env`, downloads the matching `seller-agent` binary when
+`--agent-path` is not provided, and starts it with launchd on macOS or
+`systemd --user` on Linux.
 
 Run the seller doctor after installation:
 
