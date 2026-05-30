@@ -21,6 +21,8 @@ backend/config.yaml
 /build/
 /release/
 backend/bin/
+node_modules/
+backend/node_modules/
 *.test
 *.out
 coverage.html

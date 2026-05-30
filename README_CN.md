@@ -45,12 +45,12 @@ Buyer Codex / OpenAI-compatible client
 
 已保留组件：
 
-- `backend/cmd/subi-gateway`：Gateway，接收买家 HTTP 请求和卖家 WebSocket 长连接。
-- `backend/cmd/seller-agent`：卖家侧 agent，连接 Gateway，并调用本机 upstream。
-- `backend/internal/service/subi_p2p.go`：seller registry、sticky routing、dispatch、WebSocket envelope。
-- `backend/internal/service/subi_session.go`：可选的 Gateway 托管 session 文本上下文。
-- `backend/internal/store`：SQLite 账号、Web session、Buyer API key、Seller node、setup token 存储。
-- `backend/internal/pkg/apicompat`：Anthropic / OpenAI 协议兼容辅助。
+- `backend/src/cmd/subi-gateway.ts`：Gateway，接收买家 HTTP 请求和卖家 WebSocket 长连接。
+- `backend/src/cmd/seller-agent.ts`：卖家侧 agent，连接 Gateway，并调用本机 upstream。
+- `backend/src/service/p2p.ts`：seller registry、sticky routing、dispatch、WebSocket envelope。
+- `backend/src/service/session.ts`：可选的 Gateway 托管 session 文本上下文。
+- `backend/src/store.ts`：SQLite 账号、Web session、Buyer API key、Seller node、setup token、Credit 账本和 seller 收益存储。
+- `backend/src/apicompat.ts`：Anthropic / OpenAI 协议兼容辅助。
 - `web/buyer`、`web/seller-market`：静态 Web 原型。
 
 ## 构建
@@ -59,7 +59,7 @@ Buyer Codex / OpenAI-compatible client
 make build
 ```
 
-默认通过 Dockerized Go 构建，本机不需要安装 Go。构建产物：
+后端已重构为 TypeScript，运行时和构建工具使用 Bun。首次拉取后如未安装依赖，先运行 `make tidy`。构建产物：
 
 ```text
 dist/subi-gateway
@@ -152,7 +152,7 @@ GET  /api/web/buyer/me
 GET  /api/web/buyer/balance
 GET  /api/web/buyer/api-keys
 POST /api/web/buyer/api-keys
-POST /api/web/buyer/api-keys/:id/revoke
+DELETE /api/web/buyer/api-keys/:id
 GET  /api/web/buyer/credits/plans
 POST /api/web/buyer/credits/orders
 GET  /api/web/buyer/credits/ledger

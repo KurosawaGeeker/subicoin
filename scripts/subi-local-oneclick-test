@@ -135,8 +135,8 @@ detect_binaries() {
   esac
 
   if [[ ! -x "$gateway" || ! -x "$agent" ]] ||
-    find "$ROOT/backend" -type f \( -name '*.go' -o -name 'go.mod' -o -name 'go.sum' \) -newer "$gateway" -print -quit | grep -q . ||
-    find "$ROOT/backend" -type f \( -name '*.go' -o -name 'go.mod' -o -name 'go.sum' \) -newer "$agent" -print -quit | grep -q .; then
+    find "$ROOT/backend" -type f \( -name '*.ts' -o -name 'package.json' -o -name 'bun.lock' -o -name 'tsconfig.json' \) -newer "$gateway" -print -quit | grep -q . ||
+    find "$ROOT/backend" -type f \( -name '*.ts' -o -name 'package.json' -o -name 'bun.lock' -o -name 'tsconfig.json' \) -newer "$agent" -print -quit | grep -q .; then
     info "building local binaries with: make $target"
     make -C "$ROOT" "$target" >&2
   fi
@@ -167,6 +167,15 @@ api_post() {
       -d "$payload" || true
   )"
   [[ "$code" == "$expected" ]] || fail "POST $path -> HTTP $code, expected $expected: $(tr -d '\n' <"$out" | head -c 500)"
+}
+
+api_delete() {
+  local path="$1"
+  local out="$2"
+  local expected="${3:-200}"
+  local code
+  code="$(curl -sS -X DELETE -b "$COOKIE_FILE" -c "$COOKIE_FILE" -o "$out" -w '%{http_code}' --max-time 10 "$BASE_URL$path" || true)"
+  [[ "$code" == "$expected" ]] || fail "DELETE $path -> HTTP $code, expected $expected: $(tr -d '\n' <"$out" | head -c 500)"
 }
 
 start_fake_upstream() {
@@ -310,13 +319,13 @@ pass "seller-agent connected as $NODE_ID"
 
 api_post "/api/web/buyer/api-keys" '{"name":"Local one-click test"}' "$WORK_DIR/buyer-key.json" 201
 BUYER_KEY="$(json_get 'd["secret"]' <"$WORK_DIR/buyer-key.json")"
-api_post "/api/web/buyer/api-keys" '{"name":"Temporary revoke test"}' "$WORK_DIR/revoke-key.json" 201
-REVOKE_KEY_ID="$(json_get 'd["api_key"]["id"]' <"$WORK_DIR/revoke-key.json")"
-api_post "/api/web/buyer/api-keys/$REVOKE_KEY_ID/revoke" '{}' "$WORK_DIR/revoke-result.json" 200
+api_post "/api/web/buyer/api-keys" '{"name":"Temporary delete test"}' "$WORK_DIR/delete-key.json" 201
+DELETE_KEY_ID="$(json_get 'd["api_key"]["id"]' <"$WORK_DIR/delete-key.json")"
+api_delete "/api/web/buyer/api-keys/$DELETE_KEY_ID" "$WORK_DIR/delete-result.json" 200
 api_get "/api/web/buyer/api-keys" "$WORK_DIR/api-keys.json" 200
-REVOKED_COUNT="$(json_get 'sum(1 for k in d["api_keys"] if k.get("revoked_at"))' <"$WORK_DIR/api-keys.json")"
-[[ "$REVOKED_COUNT" -ge 1 ]] || fail "expected at least one revoked API key"
-pass "buyer API key create/list/revoke works"
+DELETED_COUNT="$(json_get 'sum(1 for k in d["api_keys"] if k.get("id") == "'"$DELETE_KEY_ID"'")' <"$WORK_DIR/api-keys.json")"
+[[ "$DELETED_COUNT" == "0" ]] || fail "expected deleted API key to disappear from list"
+pass "buyer API key create/list/delete works"
 
 api_post "/api/web/buyer/credits/orders" '{"amount_credits":100}' "$WORK_DIR/credit-order.json" 201
 START_BALANCE="$(json_get 'd["wallet"]["balance_micros"]' <"$WORK_DIR/credit-order.json")"

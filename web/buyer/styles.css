@@ -47,11 +47,16 @@ h3,
 strong,
 b,
 th {
-  font-weight: 500;
+  font-weight: 400;
 }
 
 button {
   cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
 }
 
 a {
@@ -90,7 +95,7 @@ a {
   align-items: center;
   gap: 10px;
   font-size: 16px;
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .brand-mark {
@@ -102,7 +107,7 @@ a {
   background: var(--primary);
   border-radius: 8px;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .role-switcher {
@@ -121,7 +126,7 @@ a {
   color: var(--faint);
   border-radius: 999px;
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .role-switcher a.active,
@@ -162,7 +167,7 @@ a {
   background: var(--surface-soft);
   border: 1px solid var(--primary-border);
   border-radius: 8px;
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .top-actions {
@@ -170,6 +175,31 @@ a {
   gap: 12px;
   align-items: center;
   justify-content: flex-end;
+}
+
+.language-toggle {
+  display: inline-flex;
+  gap: 2px;
+  align-items: center;
+  padding: 2px;
+  background: rgba(139, 115, 85, 0.06);
+  border-radius: 999px;
+}
+
+.language-toggle button {
+  min-height: 26px;
+  padding: 0 10px;
+  color: var(--faint);
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.language-toggle button.active {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.72);
 }
 
 .top-balance svg,
@@ -214,8 +244,9 @@ a {
 .hero-copy h1 {
   max-width: 760px;
   font-size: clamp(36px, 5vw, 64px);
-  font-weight: 750;
+  font-weight: 400;
   line-height: 0.98;
+  white-space: pre-line;
 }
 
 .hero-subcopy {
@@ -244,7 +275,7 @@ a {
   border: 1px solid var(--primary-border);
   border-radius: 8px;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .value-strip svg {
@@ -276,7 +307,7 @@ a {
   padding: 0 16px;
   border: 1px solid transparent;
   border-radius: 8px;
-  font-weight: 500;
+  font-weight: 400;
   transition:
     background 140ms ease,
     border-color 140ms ease,
@@ -343,7 +374,7 @@ a {
 .balance-row span {
   color: var(--muted);
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .balance-main strong {
@@ -392,6 +423,18 @@ a {
   line-height: 1.2;
 }
 
+#credits {
+  padding: 18px;
+}
+
+#credits .panel-heading {
+  margin-bottom: 14px;
+}
+
+#credits .panel-heading h2 {
+  font-size: 22px;
+}
+
 .panel-subcopy {
   max-width: 640px;
   margin: 8px 0 0;
@@ -409,7 +452,7 @@ a {
   border: 1px solid var(--border);
   border-radius: 8px;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .copy-grid {
@@ -431,7 +474,7 @@ a {
 .copy-field span {
   color: var(--muted);
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 400;
   letter-spacing: 0.04em;
 }
 
@@ -448,7 +491,7 @@ a {
 
 .copy-field input:focus {
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.16);
+  box-shadow: 0 0 0 3px var(--primary-border);
 }
 
 .icon-btn {
@@ -477,16 +520,37 @@ a {
   margin-top: 16px;
 }
 
+.key-hint {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.inline-section-heading {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin: 22px 0 12px;
+}
+
+.inline-section-heading h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
 .credit-plans {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
+  gap: 10px;
+  align-items: start;
 }
 
 .plan-card {
   display: grid;
-  gap: 12px;
-  padding: 18px;
+  gap: 8px;
+  padding: 14px;
 }
 
 .plan-card.selected {
@@ -496,34 +560,69 @@ a {
 
 .plan-card span {
   color: var(--muted);
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .plan-card strong {
-  font-size: 40px;
+  font-size: 30px;
   line-height: 1;
 }
 
+.plan-card p {
+  margin-top: 4px;
+}
+
+.plan-card .btn {
+  min-height: 36px;
+  padding: 0 12px;
+}
+
 .custom-plan {
+  grid-template-columns: 0.9fr 1.1fr;
+  grid-template-areas:
+    "label field"
+    "amount field"
+    "copy action";
+  align-items: end;
   border-color: var(--primary-border);
+}
+
+.custom-plan > span {
+  grid-area: label;
+}
+
+.custom-plan > strong {
+  grid-area: amount;
+}
+
+.custom-plan > p {
+  grid-area: copy;
+}
+
+.custom-plan > .custom-credit-field {
+  grid-area: field;
+}
+
+.custom-plan > .btn {
+  grid-area: action;
 }
 
 .custom-credit-field {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .custom-credit-field span {
   color: var(--muted);
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 400;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
 .custom-credit-field input {
   width: 100%;
-  height: 42px;
+  height: 36px;
   padding: 0 12px;
   color: var(--text);
   background: #f9fafb;
@@ -555,7 +654,7 @@ a {
   background: #f9fafb;
   border: 1px solid var(--border);
   border-radius: 8px;
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .provider-tab.active,
@@ -588,6 +687,13 @@ a {
   font-size: 20px;
 }
 
+.provider-note {
+  margin: -4px 0 14px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
 .tag {
   display: inline-flex;
   align-items: center;
@@ -598,7 +704,7 @@ a {
   border: 1px solid var(--primary-border);
   border-radius: 8px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .code-block {
@@ -631,11 +737,11 @@ a {
   min-height: 30px;
   padding: 0 10px;
   color: #fff;
-  background: rgba(236, 72, 153, 0.9);
+  background: var(--primary);
   border: 0;
   border-radius: 8px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .doctor-card {
@@ -708,7 +814,7 @@ a {
 
 table {
   width: 100%;
-  min-width: 720px;
+  min-width: 920px;
   border-collapse: collapse;
 }
 
@@ -731,9 +837,82 @@ tbody tr:last-child td {
   border-bottom: 0;
 }
 
+tbody tr.selected-row {
+  background: var(--primary-soft);
+}
+
+tbody tr.revoked-row {
+  color: var(--muted);
+}
+
 td code {
   color: var(--primary);
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+.key-cell {
+  display: grid;
+  gap: 4px;
+  min-width: 170px;
+}
+
+.key-cell span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.key-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.key-action {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 10px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
+.key-action:hover:not(:disabled) {
+  color: var(--primary);
+  border-color: var(--primary-border);
+}
+
+.key-action.icon-only {
+  width: 34px;
+  padding: 0;
+}
+
+.key-action.danger:hover:not(:disabled) {
+  color: var(--danger);
+  border-color: rgba(220, 38, 38, 0.24);
+}
+
+#keys th:last-child,
+#keys td:last-child {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  background: var(--surface-solid);
+  box-shadow: -10px 0 16px rgba(44, 44, 44, 0.04);
+}
+
+#keys th:last-child {
+  z-index: 2;
+  background: #f9fafb;
+}
+
+#keys tr.selected-row td:last-child {
+  background: #f6f0ea;
 }
 
 .table-status {
@@ -743,7 +922,7 @@ td code {
   padding: 0 9px;
   border-radius: 8px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .table-status.ok {
@@ -802,7 +981,7 @@ body.auth-lock {
   border: 1px solid var(--border);
   border-radius: 8px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .auth-heading {
@@ -819,7 +998,7 @@ body.auth-lock {
 
 .auth-heading h2 {
   font-size: 24px;
-  font-weight: 500;
+  font-weight: 400;
   line-height: 1.15;
 }
 
@@ -836,7 +1015,7 @@ body.auth-lock {
   background: transparent;
   border: 0;
   border-radius: 8px;
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .auth-provider-grid {
@@ -889,7 +1068,7 @@ body.auth-lock {
   margin: 18px 0;
   color: var(--muted);
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .auth-divider::before,
@@ -913,7 +1092,7 @@ body.auth-lock {
 .auth-form label span {
   color: var(--muted);
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 400;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -995,6 +1174,16 @@ body.auth-lock {
   .copy-grid,
   .access-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .custom-plan {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "label"
+      "amount"
+      "copy"
+      "field"
+      "action";
   }
 
   .provider-tabs {
@@ -1080,6 +1269,23 @@ body.auth-lock {
   .access-grid,
   .provider-tabs {
     grid-template-columns: 1fr;
+  }
+
+  #keys table {
+    min-width: 520px;
+  }
+
+  #keys th:nth-child(3),
+  #keys td:nth-child(3),
+  #keys th:nth-child(4),
+  #keys td:nth-child(4),
+  #keys th:nth-child(5),
+  #keys td:nth-child(5) {
+    display: none;
+  }
+
+  .key-actions {
+    justify-content: flex-end;
   }
 
   .panel {

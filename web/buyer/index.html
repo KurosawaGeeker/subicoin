@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Subi Buyer Console</title>
+    <title>Subi 买家控制台</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
@@ -22,11 +22,15 @@
         <nav class="nav" aria-label="Buyer navigation">
           <a href="#dashboard">Dashboard</a>
           <a href="#credits">Credits</a>
-          <a href="#setup">Setup</a>
           <a href="#keys">Keys</a>
+          <a href="#setup">Setup</a>
           <a href="#usage">Usage</a>
         </nav>
         <div class="top-actions">
+          <div class="language-toggle" aria-label="Language">
+            <button class="active" type="button" data-locale="zh">中文</button>
+            <button type="button" data-locale="en">EN</button>
+          </div>
           <div class="top-balance" id="top-balance">
             <i data-lucide="wallet" aria-hidden="true"></i>
             <span>-- Credits</span>
@@ -43,23 +47,24 @@
     <main class="page-shell">
       <section id="dashboard" class="hero-console" aria-labelledby="dashboard-title">
         <div class="hero-copy">
-          <h1 id="dashboard-title">Top coding models, cheaper through P2P.</h1>
+          <h1 id="dashboard-title">最便宜的顶级模型
+得益于 SUBI 社区贡献者</h1>
           <p class="hero-subcopy">
-            Buy credits once. Use one Subi key across your coding clients without extra network setup.
+            充值一次，用同一个 Subi Key 接入 Codex、Claude Code 和常见 OpenAI 兼容客户端。
           </p>
           <div class="value-strip" aria-label="Buyer value propositions">
-            <span><i data-lucide="wifi" aria-hidden="true"></i>No proxy required</span>
-            <span><i data-lucide="badge-percent" aria-hidden="true"></i>Lower-cost top models</span>
-            <span><i data-lucide="network" aria-hidden="true"></i>P2P supply network</span>
+            <span><i data-lucide="wifi" aria-hidden="true"></i>无需梯子</span>
+            <span><i data-lucide="badge-percent" aria-hidden="true"></i>最低的价格</span>
+            <span><i data-lucide="network" aria-hidden="true"></i>社区供给网络</span>
           </div>
           <div class="hero-actions">
             <button class="btn btn-primary" type="button" data-scroll-target="#credits">
               <i data-lucide="credit-card" aria-hidden="true"></i>
               Buy Credits
             </button>
-            <button class="btn btn-secondary" type="button" data-scroll-target="#setup">
-              <i data-lucide="terminal" aria-hidden="true"></i>
-              Setup
+            <button class="btn btn-secondary" type="button" data-scroll-target="#keys">
+              <i data-lucide="key-round" aria-hidden="true"></i>
+              Access keys
             </button>
           </div>
         </div>
@@ -79,55 +84,6 @@
             <strong id="request-count">--</strong>
           </div>
         </aside>
-      </section>
-
-      <section class="panel access-panel" aria-labelledby="access-title">
-        <div class="panel-heading">
-          <div>
-            <h2 id="access-title">Your Subi access</h2>
-            <p class="panel-subcopy">
-              Claude Code does not need a separate key. Use the same Subi buyer key with the
-              Anthropic-compatible URL.
-            </p>
-          </div>
-          <button class="btn btn-secondary compact" type="button" id="reveal-key">
-            <i data-lucide="eye" aria-hidden="true"></i>
-            Reveal key
-          </button>
-        </div>
-        <div class="copy-grid access-grid">
-          <label class="copy-field">
-            <span>SUBI BUYER API KEY</span>
-            <input id="api-key" readonly type="password" value="Sign in to create a key" />
-            <button class="icon-btn" type="button" data-copy-target="api-key" aria-label="Copy Subi buyer API key">
-              <i data-lucide="copy" aria-hidden="true"></i>
-            </button>
-          </label>
-          <label class="copy-field">
-            <span>OPENAI_BASE_URL</span>
-            <input id="openai-base-url" readonly value="" />
-            <button class="icon-btn" type="button" data-copy-target="openai-base-url" aria-label="Copy OpenAI base URL">
-              <i data-lucide="copy" aria-hidden="true"></i>
-            </button>
-          </label>
-          <label class="copy-field">
-            <span>ANTHROPIC_BASE_URL</span>
-            <input id="anthropic-base-url" readonly value="" />
-            <button class="icon-btn" type="button" data-copy-target="anthropic-base-url" aria-label="Copy Claude Code base URL">
-              <i data-lucide="copy" aria-hidden="true"></i>
-            </button>
-          </label>
-        </div>
-        <div class="access-actions">
-          <button class="btn btn-primary compact" type="button" id="create-key">
-            <i data-lucide="key-round" aria-hidden="true"></i>
-            New key
-          </button>
-          <button class="btn btn-secondary compact" type="button" id="revoke-key">
-            <i data-lucide="ban" aria-hidden="true"></i>
-            Revoke current
-          </button>
-        </div>
       </section>
 
       <section id="credits" class="panel" aria-labelledby="credits-title">
@@ -181,11 +137,56 @@
         </div>
       </section>
 
-      <section id="keys" class="panel" aria-labelledby="keys-title">
+      <section id="keys" class="panel access-panel" aria-labelledby="access-title">
         <div class="panel-heading">
           <div>
-            <h2 id="keys-title">API keys</h2>
+            <h2 id="access-title">Your Subi access</h2>
+            <p class="panel-subcopy">
+              Claude Code does not need a separate key. Use the same Subi buyer key with the
+              Anthropic-compatible URL.
+            </p>
           </div>
+          <button class="btn btn-secondary compact" type="button" id="reveal-key">
+            <i data-lucide="eye" aria-hidden="true"></i>
+            Reveal key
+          </button>
+        </div>
+        <div class="copy-grid access-grid">
+          <label class="copy-field">
+            <span>SUBI BUYER API KEY</span>
+            <input id="api-key" readonly type="password" value="Sign in to create a key" />
+            <button class="icon-btn" type="button" data-copy-target="api-key" aria-label="Copy Subi buyer API key">
+              <i data-lucide="copy" aria-hidden="true"></i>
+            </button>
+          </label>
+          <label class="copy-field">
+            <span>OPENAI_BASE_URL</span>
+            <input id="openai-base-url" readonly value="" />
+            <button class="icon-btn" type="button" data-copy-target="openai-base-url" aria-label="Copy OpenAI base URL">
+              <i data-lucide="copy" aria-hidden="true"></i>
+            </button>
+          </label>
+          <label class="copy-field">
+            <span>ANTHROPIC_BASE_URL</span>
+            <input id="anthropic-base-url" readonly value="" />
+            <button class="icon-btn" type="button" data-copy-target="anthropic-base-url" aria-label="Copy Claude Code base URL">
+              <i data-lucide="copy" aria-hidden="true"></i>
+            </button>
+          </label>
+        </div>
+        <p class="key-hint" id="key-secret-hint"></p>
+        <div class="access-actions">
+          <button class="btn btn-primary compact" type="button" id="create-key">
+            <i data-lucide="key-round" aria-hidden="true"></i>
+            New key
+          </button>
+          <button class="btn btn-secondary compact" type="button" id="delete-key">
+            <i data-lucide="trash-2" aria-hidden="true"></i>
+            Delete current key
+          </button>
+        </div>
+        <div class="inline-section-heading">
+          <h3 id="keys-title">API keys</h3>
           <span class="muted-pill" id="active-key-pill">No active key</span>
         </div>
         <div class="table-wrap">
@@ -193,15 +194,16 @@
             <thead>
               <tr>
                 <th>Name</th>
-                <th>Prefix</th>
+                <th>Key</th>
                 <th>Status</th>
                 <th>Last used</th>
                 <th>Created</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody id="api-keys-table-body">
               <tr>
-                <td colspan="5">Sign in to load API keys.</td>
+                <td colspan="6">Sign in to load API keys.</td>
               </tr>
             </tbody>
           </table>
@@ -249,7 +251,7 @@
               <i data-lucide="shield-check" aria-hidden="true"></i>
               <div>
                 <strong>Buyer Doctor</strong>
-              <span id="doctor-status">Waiting for sign in</span>
+                <span id="doctor-status">Waiting for sign in</span>
               </div>
             </div>
             <ul id="doctor-list" class="check-list">
@@ -317,6 +319,7 @@
           </div>
         </div>
       </section>
+
     </main>
 
     <div class="toast" id="toast" role="status" aria-live="polite">Copied</div>

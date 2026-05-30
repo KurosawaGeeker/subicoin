@@ -35,12 +35,13 @@ screen -dmS "$SCREEN_NAME" zsh -lc "
     SUBI_GATEWAY_WS_URL=\"\$GATEWAY_WS\" \\
     SUBI_SELLER_NODE_TOKEN=\"\$SUBI_SELLER_NODE_TOKEN\" \\
     SUBI_NODE_ID='$NODE_ID' \\
-    SELLER_UPSTREAM_MODE='codex-exec' \\
+    SELLER_UPSTREAM_MODE='codex-app-server' \\
     SELLER_CODEX_BIN=\"\$(command -v codex)\" \\
     SELLER_CODEX_MODEL='gpt-5.5' \\
     SELLER_CODEX_WORKDIR='/tmp/subi-codex-work' \\
     SELLER_CODEX_SANDBOX='read-only' \\
-    SELLER_CODEX_EXTRA_ARGS='--ephemeral --ignore-user-config' \\
+    SELLER_CODEX_APP_SERVER_PORT_BASE='19100' \\
+    SELLER_CODEX_APP_SERVER_STICKY_THREADS='true' \\
     ./dist/seller-agent-darwin-arm64 >>'$LOG_FILE' 2>&1
 "
 

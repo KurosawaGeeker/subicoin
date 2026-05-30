@@ -56,16 +56,18 @@ web admin frontend, old deployment templates) was removed.
 
 ## Kept Components
 
-- `backend/cmd/subi-gateway`: standalone Gateway for buyer HTTP requests and
+- `backend/src/cmd/subi-gateway.ts`: standalone Gateway for buyer HTTP requests and
   seller WebSocket connections.
-- `backend/cmd/seller-agent`: seller-side agent that connects to the Gateway
+- `backend/src/cmd/seller-agent.ts`: seller-side agent that connects to the Gateway
   and calls a local upstream, currently persistent `codex app-server`,
   per-request `codex exec`, or an HTTP-compatible local endpoint.
-- `backend/internal/service/subi_p2p.go`: in-memory seller registry, sticky
+- `backend/src/service/p2p.ts`: in-memory seller registry, sticky
   routing, request dispatch, and WebSocket envelopes.
-- `backend/internal/service/subi_session.go`: optional buyer session context
+- `backend/src/service/session.ts`: optional buyer session context
   carry-over when a request migrates across sellers.
-- `backend/internal/pkg/apicompat`: protocol conversion helpers kept for the
+- `backend/src/store.ts`: SQLite account, Web session, Buyer API key, Seller
+  node, setup token, credit ledger, and seller earnings storage.
+- `backend/src/apicompat.ts`: protocol conversion helpers kept for the
   next phase of native Anthropic/OpenAI compatibility work.
 - `docs/SUBI_PRD_CN.md`: product requirements.
 - `docs/archive/SUBI_MVP0_EXPERIMENT_RUNBOOK_CN.md`: MVP-0 experiment runbook (archived).
@@ -108,9 +110,8 @@ codex
 make build
 ```
 
-`make` uses Dockerized Go by default so the checkout can build on machines
-without a local Go toolchain. Use `USE_LOCAL_GO=1 make test` if Go is installed
-locally.
+The backend is TypeScript running on Bun. Run `make tidy` once if dependencies
+are not installed.
 
 Outputs:
 
@@ -177,7 +178,7 @@ GET  /api/web/buyer/me
 GET  /api/web/buyer/balance
 GET  /api/web/buyer/api-keys
 POST /api/web/buyer/api-keys
-POST /api/web/buyer/api-keys/:id/revoke
+DELETE /api/web/buyer/api-keys/:id
 GET  /api/web/buyer/credits/plans
 POST /api/web/buyer/credits/orders
 GET  /api/web/buyer/credits/ledger

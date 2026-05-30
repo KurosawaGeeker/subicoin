@@ -116,16 +116,16 @@ Vendor 官方接口（OpenAI / Anthropic）
 
 #### 推荐技术栈
 
-客户端建议用 Go 写核心、Web 技术写界面，理由是现有 `seller-agent` 已经是 Go，可直接复用转发、WebSocket、凭据注入逻辑。
+当前中心服务器和 seller-agent 原型已重构为 TypeScript + Bun，优先复用同一套 TS 转发、WebSocket、SQLite 与协议兼容逻辑。桌面客户端仍可按产品阶段选择原生壳，但核心转发协议不再依赖 Go 实现。
 
 ```text
-首选：Wails（Go 核心 + Web 前端）
-  - 复用现有 Go 代码（seller-agent / apicompat / WebSocket envelope）
-  - 体积小、原生系统能力强，便于读取本地凭据和写入 coding agent 配置
+首选：Tauri / 系统原生壳 + TypeScript 核心服务
+  - 复用现有 TS 后端代码（seller-agent / apicompat / WebSocket envelope）
+  - 体积小，便于读取本地凭据和写入 coding agent 配置
   - 前端用 React + TypeScript + Tailwind
 
-备选：Tauri（Rust 核心 + Web 前端）
-  - 体积最小、安全模型好，但需要把 Go 转发逻辑用 Rust 重写或以 sidecar 方式调用现有二进制
+备选：纯 Bun sidecar + Web 前端
+  - 复用最快，便于 MVP 继续验证，但系统集成能力需要额外补齐
 
 不推荐：Electron
   - 开发最快，但体积大、内存占用高，对一个常驻挂机的卖家客户端不划算
