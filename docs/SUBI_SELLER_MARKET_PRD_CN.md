@@ -4,7 +4,7 @@
 
 状态：草案
 
-范围：卖家 Market Web 页面、卖家客户端下载入口、卖家接入配置、卖家收益与节点状态展示。本文档不实现合约、真实提现、真实收益账本和 GUI 客户端，只定义页面与 MVP 后端需求。
+范围：卖家 Market Web 页面、卖家客户端下载入口、卖家接入配置、卖家收益与节点状态展示。当前后端已具备基础 seller earning ledger；本文档不实现合约、真实提现和 GUI 客户端，只定义页面与 MVP 后端需求。
 
 ## 1. 背景
 
@@ -85,7 +85,7 @@ Provider 绑定流程
 真实 Subi Coin 结算
 ```
 
-因此本页第一版是静态原型和产品定义。页面里的 earnings、requests、balance、uptime 均为 mock 数据。
+因此本页第一版先完成产品结构；当前后端已能提供节点、earnings、requests 和 balance 的基础真实接口，uptime 仍待补。
 
 ## 3. 产品定位
 
@@ -281,7 +281,7 @@ platform_fee
 estimated_net
 ```
 
-收益估算必须标注为 estimate / mock，直到真实 Request Fill 账本上线。
+收益估算必须标注为 estimate；真实收益和请求流水来自 Request Fill 账本。
 
 ### 6.2 Client
 
@@ -446,7 +446,7 @@ UI 组件：
 自用保留用 Slider
 ```
 
-MVP 中这些设置先只作为 Web mock，不要求立刻写入 Gateway。
+MVP 中时间段等高级设置先只作为 Web 状态，不要求立刻写入 Gateway。
 
 后端落地时，Gateway 必须尊重 `max_concurrency`，并在 Seller Agent hello 中上报。
 
@@ -612,7 +612,7 @@ Codex Subscription Tab 明确不需要 OpenAI API key
 Claude Code Tab 明确标注 Coming soon
 复制按钮可用
 上线 / 下线、并发、时间段控件有可见状态变化
-收益和请求流水只展示 mock 数据
+收益和请求流水读取 Gateway 真实接口
 视觉上与 Buyer Web 属于同一产品体系
 ```
 
@@ -632,8 +632,8 @@ max_concurrency 能写入并影响调度
 建议分 4 步：
 
 ```text
-1. 静态 Seller Market 页面
-   Home / Client / Earnings / API 多页结构，使用 mock 数据。
+1. Seller Market 页面
+   Home / Client / Earnings / API 多页结构，优先读取真实接口。
 
 2. Seller node 状态接入
    读取 Gateway 在线节点、active requests、max_concurrency。

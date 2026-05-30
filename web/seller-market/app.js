@@ -1,65 +1,102 @@
-const sellerTokenValue = "seller_node_live_9xQp2aDemoToken";
-const gatewayWsUrlValue = "wss://api.subi.xyz/api/v1/subi/seller/agent/ws";
-const nodeIdValue = "seller-macbook-001";
-
-const providerContent = {
-  codex: {
-    title: "Codex 订阅",
-    tag: "推荐",
-    note:
-      "使用这台机器上已经登录的 Codex 订阅态。这个路径不需要卖家提供 OpenAI API key。",
-    config: `export SUBI_GATEWAY_WS_URL="${gatewayWsUrlValue}"
-export SUBI_SELLER_NODE_TOKEN="${sellerTokenValue}"
-export SUBI_NODE_ID="${nodeIdValue}"
-export SELLER_UPSTREAM_MODE="codex-app-server"
-export SELLER_CODEX_WORKERS=1
-export SELLER_CODEX_BIN="$(command -v codex)"
-export SELLER_CODEX_MODEL="gpt-5.5"
-export SELLER_CODEX_WORKDIR="/tmp/subi-codex-work"
-export SELLER_CODEX_SANDBOX="read-only"
-export SELLER_CODEX_APP_SERVER_PORT_BASE=19100
-export SELLER_CODEX_APP_SERVER_STICKY_THREADS=true`,
-    start: `./seller-agent`,
-  },
-  claude: {
-    title: "Claude Code 订阅",
-    tag: "目标形态",
-    note:
-      "Claude Code 卖家模式是产品目标形态。当前 MVP 先保留为等待名单占位。",
-    config: `# 即将开放
-# 卖家客户端会复用这台机器上的 Claude Code 订阅态。
-# MVP-0 暂未开放原生 Claude Code 卖家模式。`,
-    start: `# 该 Provider 开放后，在卖家后台加入等待名单。`,
-  },
-  http: {
-    title: "本地 HTTP Upstream",
-    tag: "高级模式",
-    note:
-      "当卖家机器上已经运行本地 OpenAI-compatible 或 Anthropic-compatible upstream 服务时使用。",
-    config: `export SUBI_GATEWAY_WS_URL="${gatewayWsUrlValue}"
-export SUBI_SELLER_NODE_TOKEN="${sellerTokenValue}"
-export SUBI_NODE_ID="${nodeIdValue}"
-export SELLER_UPSTREAM_MODE="http"
-export SELLER_LOCAL_BASE_URL="http://127.0.0.1:8081"
-export SELLER_LOCAL_API_KEY="local-upstream-key"`,
-    start: `./seller-agent`,
-  },
-  vps: {
-    title: "VPS Headless",
-    tag: "常驻在线",
-    note:
-      "在 VPS 上运行同一个卖家客户端，可以获得更稳定的在线时间。VPS 是设备，Provider 仍然是 Codex、Claude 或本地 HTTP。",
-    config: `export SUBI_GATEWAY_WS_URL="${gatewayWsUrlValue}"
-export SUBI_SELLER_NODE_TOKEN="${sellerTokenValue}"
-export SUBI_NODE_ID="seller-vps-001"
-export SELLER_UPSTREAM_MODE="codex-app-server"
-export SELLER_CODEX_WORKERS=1
-export SELLER_CODEX_BIN="$(command -v codex)"
-export SELLER_CODEX_WORKDIR="/tmp/subi-codex-work"
-export SELLER_CODEX_SANDBOX="read-only"`,
-    start: `nohup ./seller-agent > seller-agent.log 2>&1 &`,
-  },
+const sellerState = {
+  user: null,
+  nodes: [],
+  activeNode: null,
+  setup: null,
+  activeProvider: "codex",
+  earnings: null,
+  activity: [],
 };
+
+const creditMicros = 1_000_000;
+
+function formatCredits(micros) {
+  const credits = Number(micros || 0) / creditMicros;
+  return credits.toLocaleString(undefined, {
+    minimumFractionDigits: credits % 1 === 0 ? 0 : 2,
+    maximumFractionDigits: 6,
+  });
+}
+
+function compactID(value) {
+  if (!value) {
+    return "-";
+  }
+  if (value.length <= 18) {
+    return value;
+  }
+  return `${value.slice(0, 10)}...${value.slice(-6)}`;
+}
+
+function defaultNodeID() {
+  const stored = window.localStorage.getItem("subi_seller_node_id");
+  if (stored) {
+    return stored;
+  }
+  const random = Math.random().toString(16).slice(2, 8);
+  const nodeID = `seller-web-${random}`;
+  window.localStorage.setItem("subi_seller_node_id", nodeID);
+  return nodeID;
+}
+
+function currentInstallCommand() {
+  if (sellerState.setup?.install_command) {
+    return sellerState.setup.install_command;
+  }
+  if (!sellerState.user) {
+    return "# 登录后生成一站式安装命令";
+  }
+  if (!sellerState.activeNode) {
+    return "# 点击“开始接入”创建节点并生成安装命令";
+  }
+  return "# 点击“开始接入”生成一次性 setup token 和安装命令";
+}
+
+function providerContent() {
+  const nodeID = sellerState.activeNode?.node_id || defaultNodeID();
+  const installCommand = currentInstallCommand();
+  return {
+    codex: {
+      title: "Codex 订阅",
+      tag: "推荐",
+      note:
+        "使用这台机器上已经登录的 Codex 订阅态。这个路径不需要卖家提供 OpenAI API key。",
+      config: installCommand,
+      start: `# 安装完成后，seller-agent 会由 launchd / systemd / nohup 保持运行。`,
+    },
+    claude: {
+      title: "Claude Code 订阅",
+      tag: "目标形态",
+      note:
+        "Claude Code 卖家模式是产品目标形态。当前 MVP 先保留为等待名单占位。",
+      config: `# 即将开放
+# 卖家客户端会复用这台机器上的 Claude Code 订阅态。
+# 当前先使用 Codex Provider 完成实验。`,
+      start: `# 该 Provider 开放后，在卖家后台加入等待名单。`,
+    },
+    http: {
+      title: "本地 HTTP Upstream",
+      tag: "高级模式",
+      note:
+        "当卖家机器上已经运行本地 OpenAI-compatible 或 Anthropic-compatible upstream 服务时使用。",
+      config: `${installCommand}
+
+# 安装后编辑 ~/.subi/seller/config.env：
+SELLER_UPSTREAM_MODE="http"
+SELLER_LOCAL_BASE_URL="http://127.0.0.1:8081"
+SELLER_LOCAL_API_KEY="local-upstream-key"`,
+      start: `~/.subi/seller/seller-agent`,
+    },
+    vps: {
+      title: "VPS Headless",
+      tag: "常驻在线",
+      note:
+        "在 VPS 上运行同一个卖家客户端，可以获得更稳定的在线时间。VPS 是设备，Provider 仍然是 Codex、Claude 或本地 HTTP。",
+      config: installCommand.replace(nodeID, `${nodeID}-vps`),
+      start: `nohup ~/.subi/seller/seller-agent > ~/.subi/seller/seller-agent.log 2>&1 &`,
+    },
+  };
+}
 
 function escapeHtml(value) {
   return value
@@ -71,7 +108,8 @@ function escapeHtml(value) {
 }
 
 function renderProvider(providerKey) {
-  const provider = providerContent[providerKey];
+  sellerState.activeProvider = providerKey || sellerState.activeProvider;
+  const provider = providerContent()[sellerState.activeProvider];
   const container = document.querySelector("#provider-content");
   if (!container || !provider) {
     return;
@@ -91,6 +129,36 @@ function renderProvider(providerKey) {
       <pre><code>${escapeHtml(provider.start)}</code></pre>
     </div>
   `;
+}
+
+async function api(path, options = {}) {
+  const response = await fetch(path, {
+    credentials: "same-origin",
+    headers: {
+      Accept: "application/json",
+      ...(options.body ? { "Content-Type": "application/json" } : {}),
+      ...(options.headers || {}),
+    },
+    ...options,
+    body: options.body && typeof options.body !== "string" ? JSON.stringify(options.body) : options.body,
+  });
+  const text = await response.text();
+  const data = text ? JSON.parse(text) : {};
+  if (!response.ok) {
+    const message = data?.error?.message || `Request failed: ${response.status}`;
+    const error = new Error(message);
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+  return data;
+}
+
+function setText(selector, value) {
+  const el = document.querySelector(selector);
+  if (el) {
+    el.textContent = value;
+  }
 }
 
 function showToast(message) {
@@ -134,6 +202,18 @@ document.addEventListener("click", (event) => {
     return;
   }
 
+  const authButton = event.target.closest(".login-btn");
+  if (authButton) {
+    handleAuthAction();
+    return;
+  }
+
+  const startButton = event.target.closest("#start-onboarding");
+  if (startButton) {
+    startSellerOnboarding();
+    return;
+  }
+
   const languageButton = event.target.closest(".language-toggle button");
   if (languageButton) {
     document.querySelectorAll(".language-toggle button").forEach((button) => {
@@ -145,8 +225,229 @@ document.addEventListener("click", (event) => {
 });
 
 document.querySelector("#run-doctor")?.addEventListener("click", () => {
-  showToast("自检通过");
+  showToast(sellerState.user ? "自检通过" : "请先登录");
 });
+
+function renderAuth() {
+  document.querySelectorAll(".login-btn").forEach((button) => {
+    button.textContent = sellerState.user ? "退出" : "登录";
+  });
+}
+
+function renderHomeStats() {
+  const onlineNodes = sellerState.nodes.filter((node) => node.status === "online").length;
+  setText("#home-online-nodes", sellerState.user ? String(onlineNodes) : "--");
+  setText("#home-request-count", sellerState.user ? String(sellerState.activity.length) : "--");
+}
+
+function renderClientState() {
+  const node = sellerState.activeNode;
+  setText("#seller-node-title", node?.node_id || (sellerState.user ? "尚未创建节点" : "未登录"));
+  setText("#seller-node-status", node?.status || "--");
+  setText("#seller-node-mode", node?.provider || "--");
+  setText("#seller-node-workers", node ? `${node.max_concurrency || 1} worker` : "--");
+  renderProvider();
+}
+
+function renderEarnings() {
+  const earnings = sellerState.earnings || {};
+  setText("#seller-available", sellerState.user ? formatCredits(earnings.available_payout_micros) : "--");
+  setText("#seller-total-earned", sellerState.user ? formatCredits(earnings.total_earned_micros) : "--");
+  setText("#seller-current-balance", sellerState.user ? formatCredits(earnings.balance_micros) : "--");
+
+  const successfulFills = sellerState.activity.filter((item) => Number(item.seller_earning_micros || 0) > 0).length;
+  setText("#seller-fill-count", sellerState.user ? `来自 ${successfulFills} 次成功 fill` : "来自 -- 次成功 fill");
+
+  const body = document.querySelector("#seller-activity-body");
+  if (!body) {
+    return;
+  }
+  if (!sellerState.user) {
+    body.innerHTML = `<tr><td colspan="6">登录后加载请求流水。</td></tr>`;
+    return;
+  }
+  if (sellerState.activity.length === 0) {
+    body.innerHTML = `<tr><td colspan="6">暂无请求流水。</td></tr>`;
+    return;
+  }
+  body.innerHTML = sellerState.activity
+    .map((item) => {
+      const ok = Number(item.status || 0) >= 200 && Number(item.status || 0) < 400 && !item.error;
+      const duration = item.duration_ms ? `${(Number(item.duration_ms) / 1000).toFixed(1)}s` : "-";
+      const firstChunk = Number(item.time_to_first_chunk_ms || -1) >= 0 ? `${(Number(item.time_to_first_chunk_ms) / 1000).toFixed(1)}s` : "-";
+      const earning = item.seller_earning_micros ? `+${formatCredits(item.seller_earning_micros)}` : "0";
+      return `
+        <tr>
+          <td><code>${escapeHtml(compactID(item.request_id))}</code></td>
+          <td><code>${escapeHtml(compactID(item.buyer_user_id))}</code></td>
+          <td><span class="status-pill ${ok ? "ok" : "failed"}">${ok ? "已完成" : "失败"}</span></td>
+          <td>${escapeHtml(duration)}</td>
+          <td>${escapeHtml(firstChunk)}</td>
+          <td>${escapeHtml(earning)}</td>
+        </tr>
+      `;
+    })
+    .join("");
+}
+
+function renderAPISnippets() {
+  const buyerSnippet = document.querySelector("#buyer-api-snippet");
+  if (buyerSnippet) {
+    buyerSnippet.textContent = `export OPENAI_BASE_URL="${window.location.origin}/v1"
+export OPENAI_API_KEY="sk-subi_xxx"
+
+codex \\
+  -c 'model_provider="subi"' \\
+  -c 'model_providers.subi.name="Subi"' \\
+  -c "model_providers.subi.base_url=\\"\${OPENAI_BASE_URL}\\"" \\
+  -c 'model_providers.subi.env_key="OPENAI_API_KEY"' \\
+  -c 'model_providers.subi.wire_api="responses"'`;
+  }
+
+  const sellerSnippet = document.querySelector("#seller-api-snippet");
+  if (sellerSnippet) {
+    const wsURL = `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}/api/v1/subi/seller/agent/ws`;
+    sellerSnippet.textContent = `export SUBI_GATEWAY_WS_URL="${wsURL}"
+export SUBI_SELLER_NODE_TOKEN="seller_node_xxx"
+export SUBI_NODE_ID="seller-001"
+export SELLER_UPSTREAM_MODE="codex-app-server"
+
+./seller-agent`;
+  }
+}
+
+function renderAll() {
+  renderAuth();
+  renderHomeStats();
+  renderClientState();
+  renderEarnings();
+  renderAPISnippets();
+}
+
+async function loadSellerAccount() {
+  try {
+    const payload = await api("/api/web/auth/me");
+    sellerState.user = payload.user;
+    const [nodesPayload, earningsPayload, activityPayload] = await Promise.all([
+      api("/api/web/seller/nodes"),
+      api("/api/web/seller/earnings"),
+      api("/api/web/seller/activity?limit=20"),
+    ]);
+    sellerState.nodes = nodesPayload.nodes || [];
+    sellerState.activeNode = sellerState.nodes[0] || null;
+    sellerState.earnings = earningsPayload.earnings || null;
+    sellerState.activity = activityPayload.activity || [];
+  } catch (error) {
+    if (error.status !== 401) {
+      showToast(error.message);
+    }
+    sellerState.user = null;
+    sellerState.nodes = [];
+    sellerState.activeNode = null;
+    sellerState.setup = null;
+    sellerState.earnings = null;
+    sellerState.activity = [];
+  }
+  renderAll();
+}
+
+async function loginOrRegister() {
+  const email = window.prompt("邮箱");
+  if (!email) {
+    return;
+  }
+  const password = window.prompt("密码，至少 8 位");
+  if (!password) {
+    return;
+  }
+  try {
+    await api("/api/web/auth/login", {
+      method: "POST",
+      body: { email, password },
+    });
+  } catch (error) {
+    if (error.status !== 401) {
+      throw error;
+    }
+    await api("/api/web/auth/register", {
+      method: "POST",
+      body: { email, password },
+    });
+  }
+  showToast("已登录");
+  await loadSellerAccount();
+}
+
+async function logout() {
+  await api("/api/web/auth/logout", { method: "POST" });
+  sellerState.user = null;
+  sellerState.nodes = [];
+  sellerState.activeNode = null;
+  sellerState.setup = null;
+  sellerState.earnings = null;
+  sellerState.activity = [];
+  renderAll();
+  showToast("已退出");
+}
+
+async function handleAuthAction() {
+  try {
+    if (sellerState.user) {
+      await logout();
+    } else {
+      await loginOrRegister();
+    }
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
+async function ensureSellerNode() {
+  if (sellerState.activeNode) {
+    return sellerState.activeNode;
+  }
+  const nodeID = defaultNodeID();
+  let payload;
+  try {
+    payload = await api("/api/web/seller/nodes", {
+      method: "POST",
+      body: {
+        node_id: nodeID,
+        provider: "codex-app-server",
+        max_concurrency: 1,
+      },
+    });
+  } catch (error) {
+    if (error.status !== 409) {
+      throw error;
+    }
+    window.localStorage.removeItem("subi_seller_node_id");
+    return ensureSellerNode();
+  }
+  sellerState.activeNode = payload.node;
+  sellerState.nodes = [payload.node, ...sellerState.nodes];
+  return payload.node;
+}
+
+async function startSellerOnboarding() {
+  try {
+    if (!sellerState.user) {
+      await loginOrRegister();
+      if (!sellerState.user) {
+        return;
+      }
+    }
+    const node = await ensureSellerNode();
+    sellerState.setup = await api(`/api/web/seller/nodes/${encodeURIComponent(node.node_id)}/setup-token`, {
+      method: "POST",
+      body: {},
+    });
+    renderAll();
+    showToast("安装命令已生成");
+  } catch (error) {
+    showToast(error.message);
+  }
+}
 
 function initNetworkMap() {
   const canvas = document.querySelector("#network-map");
@@ -538,5 +839,6 @@ function initNetworkMap() {
   });
 }
 
-renderProvider("codex");
+renderAll();
 initNetworkMap();
+loadSellerAccount();

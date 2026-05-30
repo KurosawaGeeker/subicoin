@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -52,6 +53,11 @@ type gatewayConfig struct {
 	SessionMaxTurns       int
 	SessionMaxChars       int
 	SessionStore          *service.SubiSessionStore
+	RequestCostMicros     int64
+	SellerEarningMicros   int64
+	PlatformFeeMicros     int64
+	ReserveMicros         int64
+	WebDir                string
 }
 
 func main() {
@@ -75,6 +81,7 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"ok":true}`))
 	})
+	mountWebStatic(mux, cfg)
 	mux.HandleFunc("/api/web/auth/", func(w http.ResponseWriter, r *http.Request) {
 		handleWebAuth(w, r, cfg)
 	})
@@ -132,12 +139,23 @@ func loadConfig() gatewayConfig {
 		SessionContextEnabled: envBool("SUBI_SESSION_CONTEXT_ENABLED"),
 		SessionMaxTurns:       envInt("SUBI_SESSION_MAX_TURNS", service.DefaultSubiSessionMaxTurns),
 		SessionMaxChars:       envInt("SUBI_SESSION_MAX_CHARS", service.DefaultSubiSessionMaxChars),
+		RequestCostMicros:     envInt64("SUBI_FIXED_REQUEST_COST_MICROS", store.CreditMicrosPerCredit),
+		SellerEarningMicros:   envInt64("SUBI_SELLER_EARNING_MICROS", 800_000),
+		PlatformFeeMicros:     envInt64("SUBI_PLATFORM_FEE_MICROS", 150_000),
+		ReserveMicros:         envInt64("SUBI_RESERVE_MICROS", 50_000),
+		WebDir:                envOrDefault("SUBI_WEB_DIR", "web"),
 	}
 }
 
 func validateConfig(cfg gatewayConfig) error {
 	if strings.TrimSpace(cfg.Addr) == "" {
 		return errors.New("SUBI_GATEWAY_ADDR is required")
+	}
+	if cfg.RequestCostMicros <= 0 {
+		return errors.New("SUBI_FIXED_REQUEST_COST_MICROS must be positive")
+	}
+	if cfg.SellerEarningMicros < 0 || cfg.PlatformFeeMicros < 0 || cfg.ReserveMicros < 0 {
+		return errors.New("SUBI settlement split values must be non-negative")
 	}
 	if cfg.Store != nil && !cfg.DevStaticKeys {
 		return nil
@@ -202,6 +220,29 @@ func handleSellerAgentWS(w http.ResponseWriter, r *http.Request, cfg gatewayConf
 	}
 }
 
+func mountWebStatic(mux *http.ServeMux, cfg gatewayConfig) {
+	webDir := strings.TrimSpace(cfg.WebDir)
+	if webDir == "" {
+		return
+	}
+	buyerDir := filepath.Join(webDir, "buyer")
+	sellerDir := filepath.Join(webDir, "seller-market")
+
+	mux.HandleFunc("/buyer", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/buyer/", http.StatusTemporaryRedirect)
+	})
+	mux.Handle("/buyer/", http.StripPrefix("/buyer/", http.FileServer(http.Dir(buyerDir))))
+
+	mux.HandleFunc("/seller", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/seller/", http.StatusTemporaryRedirect)
+	})
+	mux.Handle("/seller/", http.StripPrefix("/seller/", http.FileServer(http.Dir(sellerDir))))
+	mux.HandleFunc("/seller-market", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/seller/", http.StatusTemporaryRedirect)
+	})
+	mux.Handle("/seller-market/", http.StripPrefix("/seller-market/", http.FileServer(http.Dir(sellerDir))))
+}
+
 func handleBuyerRequest(w http.ResponseWriter, r *http.Request, cfg gatewayConfig) {
 	startedAt := time.Now()
 	requestID := service.NewSubiP2PRequestID()
@@ -221,6 +262,9 @@ func handleBuyerRequest(w http.ResponseWriter, r *http.Request, cfg gatewayConfi
 	historyTurnsInjected := 0
 	timeToFirstChunkMs := int64(-1)
 	bytesOut := int64(0)
+	var buyerAuth store.AuthenticatedBuyerKey
+	creditsReserved := false
+	creditsChargedMicros := int64(0)
 	w.Header().Set("X-Subi-Request-ID", requestID)
 	defer func() {
 		logGatewayAccess(gatewayAccessLog{
@@ -237,6 +281,7 @@ func handleBuyerRequest(w http.ResponseWriter, r *http.Request, cfg gatewayConfi
 			Duration:             time.Since(startedAt),
 			TimeToFirstChunkMs:   timeToFirstChunkMs,
 			BytesOut:             bytesOut,
+			CreditsChargedMicros: creditsChargedMicros,
 			Error:                errorMessage,
 			Stream:               stream,
 		})
@@ -257,11 +302,17 @@ func handleBuyerRequest(w http.ResponseWriter, r *http.Request, cfg gatewayConfi
 		return
 	}
 	buyerSecret := buyerCredential(r)
-	if !authenticateBuyerRequest(r.Context(), cfg, buyerSecret) {
+	authenticated, auth, err := authenticateBuyerCredential(r.Context(), cfg, buyerSecret)
+	if err != nil {
+		log.Printf("buyer api key auth failed: %v", err)
+	}
+	if !authenticated {
 		fail(http.StatusUnauthorized, "authentication_error", "invalid buyer API key")
 		return
 	}
-	if cfg.Store != nil && !staticBuyerKeyAllowed(cfg, buyerSecret) {
+	buyerAuth = auth
+	accountingEnabled := cfg.Store != nil && buyerAuth.UserID != "" && buyerAuth.ID != ""
+	if accountingEnabled {
 		buyerKeyHash = store.HashSecret(buyerSecret)[:16]
 	}
 
@@ -273,6 +324,90 @@ func handleBuyerRequest(w http.ResponseWriter, r *http.Request, cfg gatewayConfi
 	if len(body) == 0 {
 		fail(http.StatusBadRequest, "invalid_request_error", "request body is empty")
 		return
+	}
+
+	refundReservedCredits := func(reason string) {
+		if !creditsReserved || !accountingEnabled {
+			return
+		}
+		if _, _, err := cfg.Store.RefundBuyerCreditsForRequest(context.Background(), buyerAuth.UserID, requestID, reason); err != nil {
+			log.Printf("subi credit refund failed: request_id=%s buyer_user_id=%s error=%v", requestID, buyerAuth.UserID, err)
+			return
+		}
+		creditsReserved = false
+		creditsChargedMicros = 0
+	}
+	recordUsage := func(costMicros, sellerEarningMicros int64, recordError string) {
+		if !accountingEnabled {
+			return
+		}
+		if _, err := cfg.Store.RecordRequestUsage(context.Background(), store.RequestFillInput{
+			RequestID:           requestID,
+			BuyerUserID:         buyerAuth.UserID,
+			BuyerAPIKeyID:       buyerAuth.ID,
+			SellerNodeID:        sellerNode,
+			Path:                path,
+			StatusCode:          status,
+			Stream:              stream,
+			DurationMS:          time.Since(startedAt).Milliseconds(),
+			TimeToFirstChunkMS:  timeToFirstChunkMs,
+			BytesOut:            bytesOut,
+			CostMicros:          costMicros,
+			SellerEarningMicros: sellerEarningMicros,
+			PlatformFeeMicros:   cfg.PlatformFeeMicros,
+			ReserveMicros:       cfg.ReserveMicros,
+			Error:               recordError,
+		}); err != nil {
+			log.Printf("subi request usage record failed: request_id=%s buyer_user_id=%s error=%v", requestID, buyerAuth.UserID, err)
+		}
+	}
+	settleSuccessfulRequest := func() bool {
+		if !accountingEnabled || !creditsReserved {
+			return true
+		}
+		fill, _, err := cfg.Store.RecordSuccessfulRequestFillAndSellerEarning(context.Background(), store.RequestFillInput{
+			RequestID:           requestID,
+			BuyerUserID:         buyerAuth.UserID,
+			BuyerAPIKeyID:       buyerAuth.ID,
+			SellerNodeID:        sellerNode,
+			Path:                path,
+			StatusCode:          status,
+			Stream:              stream,
+			DurationMS:          time.Since(startedAt).Milliseconds(),
+			TimeToFirstChunkMS:  timeToFirstChunkMs,
+			BytesOut:            bytesOut,
+			CostMicros:          cfg.RequestCostMicros,
+			SellerEarningMicros: cfg.SellerEarningMicros,
+			PlatformFeeMicros:   cfg.PlatformFeeMicros,
+			ReserveMicros:       cfg.ReserveMicros,
+			Error:               "",
+		})
+		if err != nil {
+			log.Printf("subi successful request settlement failed: request_id=%s buyer_user_id=%s seller_node=%s error=%v", requestID, buyerAuth.UserID, sellerNode, err)
+			refundReservedCredits("settlement failed")
+			recordUsage(0, 0, "settlement failed")
+			return false
+		}
+		creditsReserved = false
+		creditsChargedMicros = fill.CostMicros
+		return true
+	}
+
+	if accountingEnabled {
+		w.Header().Set("X-Subi-Cost-Micros", strconv.FormatInt(cfg.RequestCostMicros, 10))
+		w.Header().Set("X-Subi-Cost-Credits", fmt.Sprintf("%.6f", float64(cfg.RequestCostMicros)/float64(store.CreditMicrosPerCredit)))
+		_, _, err := cfg.Store.ReserveBuyerCreditsForRequest(r.Context(), buyerAuth.UserID, requestID, cfg.RequestCostMicros, "request pre-authorization")
+		if errors.Is(err, store.ErrInsufficientCredits) {
+			fail(http.StatusPaymentRequired, "insufficient_credits", "insufficient credits")
+			return
+		}
+		if err != nil {
+			log.Printf("subi credit reserve failed: request_id=%s buyer_user_id=%s error=%v", requestID, buyerAuth.UserID, err)
+			fail(http.StatusInternalServerError, "api_error", "failed to reserve credits")
+			return
+		}
+		creditsReserved = true
+		creditsChargedMicros = cfg.RequestCostMicros
 	}
 
 	stream = gjson.GetBytes(body, "stream").Bool()
@@ -311,8 +446,16 @@ func handleBuyerRequest(w http.ResponseWriter, r *http.Request, cfg gatewayConfi
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrSubiP2PAgentBusy):
+			refundReservedCredits("seller node busy")
+			status = http.StatusServiceUnavailable
+			errorMessage = "seller node is busy, please retry later"
+			recordUsage(0, 0, errorMessage)
 			fail(http.StatusServiceUnavailable, "api_error", "seller node is busy, please retry later")
 		default:
+			refundReservedCredits("no available seller node")
+			status = http.StatusServiceUnavailable
+			errorMessage = "no available seller node"
+			recordUsage(0, 0, errorMessage)
 			fail(http.StatusServiceUnavailable, "api_error", "no available seller node")
 		}
 		return
@@ -382,6 +525,8 @@ func handleBuyerRequest(w http.ResponseWriter, r *http.Request, cfg gatewayConfi
 				}
 				if _, err := w.Write(ev.Data); err != nil {
 					errorMessage = err.Error()
+					refundReservedCredits("buyer connection write failed")
+					recordUsage(0, 0, errorMessage)
 					return
 				}
 				flush(flusher)
@@ -392,21 +537,39 @@ func handleBuyerRequest(w http.ResponseWriter, r *http.Request, cfg gatewayConfi
 				if status == 0 {
 					status = http.StatusOK
 				}
+				refundReservedCredits(errorMessage)
+				recordUsage(0, 0, errorMessage)
 				writeSSEError(w, ev.Error)
 				flush(flusher)
 				return
 			}
+			status = http.StatusBadGateway
+			refundReservedCredits(errorMessage)
+			recordUsage(0, 0, errorMessage)
 			fail(http.StatusBadGateway, "api_error", ev.Error)
 			return
 		case service.SubiEnvelopeResponseEnd:
 			if status == 0 {
 				status = http.StatusOK
 			}
+			if status >= 200 && status < 400 {
+				if !settleSuccessfulRequest() {
+					errorMessage = "settlement failed"
+				}
+			} else {
+				if errorMessage == "" {
+					errorMessage = fmt.Sprintf("upstream status %d", status)
+				}
+				refundReservedCredits(errorMessage)
+				recordUsage(0, 0, errorMessage)
+			}
 			saveSession()
 			return
 		}
 	}
 	errorMessage = "seller agent response stream closed"
+	refundReservedCredits(errorMessage)
+	recordUsage(0, 0, errorMessage)
 	if !responseStarted {
 		fail(http.StatusBadGateway, "api_error", errorMessage)
 		return
@@ -488,6 +651,53 @@ func handleWebBuyer(w http.ResponseWriter, r *http.Request, cfg gatewayConfig) {
 	switch {
 	case r.Method == http.MethodGet && r.URL.Path == "/api/web/buyer/me":
 		writeJSON(w, http.StatusOK, map[string]any{"buyer": map[string]any{"user_id": user.ID, "email": user.Email}})
+	case r.Method == http.MethodGet && r.URL.Path == "/api/web/buyer/balance":
+		wallet, err := cfg.Store.GetBuyerCreditWallet(r.Context(), user.ID)
+		if err != nil {
+			writeStoreError(w, err, "get buyer balance failed")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"wallet": wallet})
+	case r.Method == http.MethodGet && r.URL.Path == "/api/web/buyer/credits/plans":
+		writeJSON(w, http.StatusOK, map[string]any{
+			"plans": []map[string]any{
+				{"id": "credits_100", "credits": 100, "amount_micros": 100 * store.CreditMicrosPerCredit, "mode": "mock"},
+				{"id": "credits_500", "credits": 500, "amount_micros": 500 * store.CreditMicrosPerCredit, "mode": "mock"},
+				{"id": "credits_2000", "credits": 2000, "amount_micros": 2000 * store.CreditMicrosPerCredit, "mode": "mock"},
+			},
+		})
+	case r.Method == http.MethodPost && r.URL.Path == "/api/web/buyer/credits/orders":
+		var req struct {
+			AmountCredits int64 `json:"amount_credits"`
+			AmountMicros  int64 `json:"amount_micros"`
+		}
+		if !decodeJSONBody(w, r, &req) {
+			return
+		}
+		amountMicros := req.AmountMicros
+		if req.AmountCredits > 0 {
+			amountMicros = req.AmountCredits * store.CreditMicrosPerCredit
+		}
+		order, ledger, wallet, err := cfg.Store.CreateMockCreditOrder(r.Context(), user.ID, amountMicros)
+		if err != nil {
+			writeStoreError(w, err, "create credit order failed")
+			return
+		}
+		writeJSON(w, http.StatusCreated, map[string]any{"order": order, "ledger_entry": ledger, "wallet": wallet})
+	case r.Method == http.MethodGet && r.URL.Path == "/api/web/buyer/credits/ledger":
+		entries, err := cfg.Store.ListBuyerCreditLedger(r.Context(), user.ID, limitFromQuery(r, 50))
+		if err != nil {
+			writeAPIError(w, http.StatusInternalServerError, "list credit ledger failed")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ledger": entries})
+	case r.Method == http.MethodGet && r.URL.Path == "/api/web/buyer/usage":
+		usage, err := cfg.Store.ListBuyerUsage(r.Context(), user.ID, limitFromQuery(r, 50))
+		if err != nil {
+			writeAPIError(w, http.StatusInternalServerError, "list buyer usage failed")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"usage": usage})
 	case r.Method == http.MethodGet && r.URL.Path == "/api/web/buyer/api-keys":
 		keys, err := cfg.Store.ListBuyerAPIKeys(r.Context(), user.ID)
 		if err != nil {
@@ -536,6 +746,25 @@ func handleWebSeller(w http.ResponseWriter, r *http.Request, cfg gatewayConfig) 
 	switch {
 	case r.Method == http.MethodGet && r.URL.Path == "/api/web/seller/me":
 		writeJSON(w, http.StatusOK, map[string]any{"seller": map[string]any{"user_id": user.ID, "email": user.Email}})
+	case r.Method == http.MethodGet && r.URL.Path == "/api/web/seller/earnings":
+		summary, err := cfg.Store.GetSellerEarningsSummary(r.Context(), user.ID)
+		if err != nil {
+			writeStoreError(w, err, "get seller earnings failed")
+			return
+		}
+		ledger, err := cfg.Store.ListSellerEarningLedger(r.Context(), user.ID, limitFromQuery(r, 50))
+		if err != nil {
+			writeAPIError(w, http.StatusInternalServerError, "list seller earnings failed")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"earnings": summary, "ledger": ledger})
+	case r.Method == http.MethodGet && r.URL.Path == "/api/web/seller/activity":
+		activity, err := cfg.Store.ListSellerActivity(r.Context(), user.ID, limitFromQuery(r, 50))
+		if err != nil {
+			writeAPIError(w, http.StatusInternalServerError, "list seller activity failed")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"activity": activity})
 	case r.Method == http.MethodGet && r.URL.Path == "/api/web/seller/nodes":
 		nodes, err := cfg.Store.ListSellerNodes(r.Context(), user.ID)
 		if err != nil {
@@ -638,13 +867,14 @@ type gatewayAccessLog struct {
 	Duration             time.Duration
 	TimeToFirstChunkMs   int64
 	BytesOut             int64
+	CreditsChargedMicros int64
 	Error                string
 	Stream               bool
 }
 
 func logGatewayAccess(entry gatewayAccessLog) {
 	log.Printf(
-		"subi_gateway_access request_id=%s buyer_key_hash=%q session_id=%q path=%q status=%d seller_node=%q previous_seller_node=%q session_migrated=%t history_turns_injected=%d upstream_mode=%q duration_ms=%d time_to_first_chunk_ms=%d bytes_out=%d error=%q stream=%t",
+		"subi_gateway_access request_id=%s buyer_key_hash=%q session_id=%q path=%q status=%d seller_node=%q previous_seller_node=%q session_migrated=%t history_turns_injected=%d upstream_mode=%q duration_ms=%d time_to_first_chunk_ms=%d bytes_out=%d credits_charged_micros=%d error=%q stream=%t",
 		entry.RequestID,
 		entry.BuyerKeyHash,
 		entry.SessionID,
@@ -658,6 +888,7 @@ func logGatewayAccess(entry gatewayAccessLog) {
 		entry.Duration.Milliseconds(),
 		entry.TimeToFirstChunkMs,
 		entry.BytesOut,
+		entry.CreditsChargedMicros,
 		entry.Error,
 		entry.Stream,
 	)
@@ -693,6 +924,20 @@ func staticBuyerKeyAllowed(cfg gatewayConfig, secret string) bool {
 
 func staticSellerTokenAllowed(cfg gatewayConfig, secret string) bool {
 	return strings.TrimSpace(secret) != "" && strings.TrimSpace(cfg.SellerNodeToken) != "" && secret == cfg.SellerNodeToken && (cfg.Store == nil || cfg.DevStaticKeys)
+}
+
+func authenticateBuyerCredential(ctx context.Context, cfg gatewayConfig, secret string) (bool, store.AuthenticatedBuyerKey, error) {
+	if staticBuyerKeyAllowed(cfg, secret) {
+		return true, store.AuthenticatedBuyerKey{}, nil
+	}
+	if cfg.Store == nil {
+		return false, store.AuthenticatedBuyerKey{}, nil
+	}
+	key, err := cfg.Store.AuthenticateBuyerAPIKey(ctx, secret)
+	if err != nil {
+		return false, store.AuthenticatedBuyerKey{}, err
+	}
+	return true, key, nil
 }
 
 func authenticateBuyerRequest(ctx context.Context, cfg gatewayConfig, secret string) bool {
@@ -820,6 +1065,8 @@ func writeStoreError(w http.ResponseWriter, err error, fallback string) {
 	switch {
 	case errors.Is(err, store.ErrConflict):
 		writeAPIError(w, http.StatusConflict, fallback)
+	case errors.Is(err, store.ErrInsufficientCredits):
+		writeAPIError(w, http.StatusPaymentRequired, "insufficient credits")
 	case errors.Is(err, store.ErrInvalid):
 		writeAPIError(w, http.StatusBadRequest, fallback)
 	case errors.Is(err, store.ErrNotFound):
@@ -840,6 +1087,24 @@ func decodeJSONBody(w http.ResponseWriter, r *http.Request, out any) bool {
 		return false
 	}
 	return true
+}
+
+func limitFromQuery(r *http.Request, fallback int) int {
+	if r == nil || r.URL == nil {
+		return fallback
+	}
+	value := strings.TrimSpace(r.URL.Query().Get("limit"))
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed <= 0 {
+		return fallback
+	}
+	if parsed > 200 {
+		return 200
+	}
+	return parsed
 }
 
 func requireWebUser(w http.ResponseWriter, r *http.Request, cfg gatewayConfig) (store.User, bool) {
@@ -986,6 +1251,18 @@ func envInt(key string, fallback int) int {
 		return fallback
 	}
 	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed <= 0 {
+		return fallback
+	}
+	return parsed
+}
+
+func envInt64(key string, fallback int64) int64 {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.ParseInt(value, 10, 64)
 	if err != nil || parsed <= 0 {
 		return fallback
 	}

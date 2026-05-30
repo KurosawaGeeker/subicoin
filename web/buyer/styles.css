@@ -112,6 +112,13 @@ a {
   font-weight: 700;
 }
 
+.top-actions {
+  display: inline-flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
 .top-balance svg,
 .btn svg,
 .icon-btn svg,
@@ -743,6 +750,10 @@ td code {
   }
 
   .top-balance {
+    justify-self: end;
+  }
+
+  .top-actions {
     justify-self: end;
   }
 

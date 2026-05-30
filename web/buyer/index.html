@@ -18,9 +18,12 @@
         <a href="#setup">Setup</a>
         <a href="#usage">Usage</a>
       </nav>
-      <div class="top-balance">
+      <div class="top-actions">
+      <div class="top-balance" id="top-balance">
         <i data-lucide="wallet" aria-hidden="true"></i>
-        <span>1,248 Credits</span>
+        <span>-- Credits</span>
+      </div>
+      <button class="btn btn-secondary compact" id="auth-action" type="button">Login</button>
       </div>
     </header>
 
@@ -51,16 +54,16 @@
         <aside class="balance-panel" aria-label="Buyer credits overview">
           <div class="balance-main">
             <span>Your Credits</span>
-            <strong>1,248</strong>
-            <p>Estimated for 416 short coding requests.</p>
+            <strong id="credit-balance">--</strong>
+            <p id="credit-estimate">Login to load your balance.</p>
           </div>
           <div class="balance-row">
             <span>Today spend</span>
-            <strong>32</strong>
+            <strong id="today-spend">--</strong>
           </div>
           <div class="balance-row">
             <span>Requests</span>
-            <strong>9</strong>
+            <strong id="request-count">--</strong>
           </div>
         </aside>
       </section>
@@ -82,21 +85,21 @@
         <div class="copy-grid access-grid">
           <label class="copy-field">
             <span>SUBI BUYER API KEY</span>
-            <input id="api-key" readonly type="password" value="sk-subi_live_7K4m9xQp2aDemoKey" />
+            <input id="api-key" readonly type="password" value="Login to create a key" />
             <button class="icon-btn" type="button" data-copy-target="api-key" aria-label="Copy Subi buyer API key">
               <i data-lucide="copy" aria-hidden="true"></i>
             </button>
           </label>
           <label class="copy-field">
             <span>OPENAI_BASE_URL</span>
-            <input id="openai-base-url" readonly value="https://api.subi.xyz/v1" />
+            <input id="openai-base-url" readonly value="" />
             <button class="icon-btn" type="button" data-copy-target="openai-base-url" aria-label="Copy OpenAI base URL">
               <i data-lucide="copy" aria-hidden="true"></i>
             </button>
           </label>
           <label class="copy-field">
             <span>ANTHROPIC_BASE_URL</span>
-            <input id="anthropic-base-url" readonly value="https://api.subi.xyz" />
+            <input id="anthropic-base-url" readonly value="" />
             <button class="icon-btn" type="button" data-copy-target="anthropic-base-url" aria-label="Copy Claude Code base URL">
               <i data-lucide="copy" aria-hidden="true"></i>
             </button>
@@ -116,7 +119,7 @@
             <span>Starter</span>
             <strong>100</strong>
             <p>Quick test budget.</p>
-            <button class="btn btn-secondary full" type="button">
+            <button class="btn btn-secondary full" type="button" data-add-credits="100">
               <i data-lucide="plus" aria-hidden="true"></i>
               Add 100
             </button>
@@ -125,7 +128,7 @@
             <span>Builder</span>
             <strong>500</strong>
             <p>Daily coding usage.</p>
-            <button class="btn btn-primary full" type="button">
+            <button class="btn btn-primary full" type="button" data-add-credits="500">
               <i data-lucide="plus" aria-hidden="true"></i>
               Add 500
             </button>
@@ -134,7 +137,7 @@
             <span>Studio</span>
             <strong>2,000</strong>
             <p>Heavy sessions.</p>
-            <button class="btn btn-secondary full" type="button">
+            <button class="btn btn-secondary full" type="button" data-add-credits="2000">
               <i data-lucide="plus" aria-hidden="true"></i>
               Add 2,000
             </button>
@@ -196,7 +199,7 @@
               <i data-lucide="shield-check" aria-hidden="true"></i>
               <div>
                 <strong>Buyer Doctor</strong>
-                <span>Static prototype result</span>
+              <span id="doctor-status">Waiting for login</span>
               </div>
             </div>
             <ul id="doctor-list" class="check-list">
@@ -230,27 +233,9 @@
                 <th>Credits</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody id="usage-table-body">
               <tr>
-                <td><code>request_7b91</code></td>
-                <td><span class="table-status ok">Completed</span></td>
-                <td>seller-002</td>
-                <td>2.8s</td>
-                <td>-4</td>
-              </tr>
-              <tr>
-                <td><code>request_6a04</code></td>
-                <td><span class="table-status ok">Completed</span></td>
-                <td>seller-002</td>
-                <td>3.1s</td>
-                <td>-5</td>
-              </tr>
-              <tr>
-                <td><code>request_590e</code></td>
-                <td><span class="table-status refunded">Refunded</span></td>
-                <td>seller-002</td>
-                <td>timeout</td>
-                <td>0</td>
+                <td colspan="5">Login to load usage.</td>
               </tr>
             </tbody>
           </table>

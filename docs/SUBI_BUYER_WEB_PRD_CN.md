@@ -434,7 +434,7 @@ request_id
 note
 ```
 
-当前 Gateway 已有 access log 的基础字段，但还没有买家账户、余额扣费和 credit ledger。Web MVP 需要补齐服务端账本。
+当前 Gateway 已有 access log、买家账户、余额扣费、credit ledger、request fill 和 seller earning ledger。Web MVP 下一步需要把页面从 mock 数据切到这些真实接口。
 
 ## 7. Credit 计费要求
 
@@ -652,14 +652,14 @@ MVP-1 Buyer Web 通过标准：
 建议分 4 个小步：
 
 ```text
-1. 静态 Buyer Web 页面
-   Dashboard / Credits / Setup / Usage，使用 mock 数据。
+1. Buyer Web 页面
+   Dashboard / Credits / Setup / Usage，优先读取真实接口。
 
 2. Buyer API key 和 Doctor
    接真实服务可用性、API key 校验、/v1/responses 自检。
 
 3. Credit ledger
-   实现买家余额、充值订单、请求扣费、Usage 关联 request_id。
+   已实现买家余额、mock 充值订单、请求预扣 / 失败退款、Usage 关联 request_id 和 seller earning ledger。
 
 4. 真实支付入口
    接入支付系统或后台确认充值流程。

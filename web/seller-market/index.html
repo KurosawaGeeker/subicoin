@@ -26,7 +26,7 @@
             <button class="active" type="button">中文</button>
             <button type="button">EN</button>
           </div>
-          <button class="login-btn" type="button">登录</button>
+          <button class="login-btn" id="auth-action" type="button">登录</button>
         </div>
       </div>
     </nav>
@@ -143,11 +143,11 @@
         </div>
         <div class="network-stats">
           <article>
-            <strong>--</strong>
+            <strong id="home-online-nodes">--</strong>
             <span>在线卖家节点</span>
           </article>
           <article>
-            <strong>--</strong>
+            <strong id="home-request-count">--</strong>
             <span>24 小时请求</span>
           </article>
           <article>
@@ -157,7 +157,7 @@
         </div>
         <div class="network-note">
           <p>
-            当前页面使用 mock 数据。正式收益会来自 Request Fill 账本和小时结算。
+            当前页面会优先读取登录卖家的真实节点和 Request Fill 账本。
           </p>
         </div>
       </section>

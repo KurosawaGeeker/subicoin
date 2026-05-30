@@ -138,6 +138,7 @@ This runs tests for:
 - standalone `subi-gateway`
 - `seller-agent`
 - protocol compatibility helpers
+- SQLite account, node, credit ledger, and seller earnings storage
 
 ## Gateway
 
@@ -155,6 +156,14 @@ single static key model:
 ```bash
 export SUBI_DB_PATH="/opt/subi/subi.db"
 export SUBI_PUBLIC_GATEWAY_WS_URL="wss://<gateway-host>/api/v1/subi/seller/agent/ws"
+export SUBI_WEB_DIR="./web"
+```
+
+The Gateway serves the static consoles from the same origin:
+
+```text
+GET /buyer/
+GET /seller/
 ```
 
 When `SUBI_DB_PATH` is set, the Gateway exposes minimal Web APIs for:
@@ -162,8 +171,20 @@ When `SUBI_DB_PATH` is set, the Gateway exposes minimal Web APIs for:
 ```text
 POST /api/web/auth/register
 POST /api/web/auth/login
+POST /api/web/auth/logout
 GET  /api/web/auth/me
+GET  /api/web/buyer/me
+GET  /api/web/buyer/balance
+GET  /api/web/buyer/api-keys
 POST /api/web/buyer/api-keys
+POST /api/web/buyer/api-keys/:id/revoke
+GET  /api/web/buyer/credits/plans
+POST /api/web/buyer/credits/orders
+GET  /api/web/buyer/credits/ledger
+GET  /api/web/buyer/usage
+GET  /api/web/seller/me
+GET  /api/web/seller/earnings
+GET  /api/web/seller/activity
 GET  /api/web/seller/nodes
 POST /api/web/seller/nodes
 POST /api/web/seller/nodes/:node_id/setup-token
@@ -182,6 +203,19 @@ export SUBI_SESSION_CONTEXT_ENABLED=true
 export SUBI_SESSION_MAX_TURNS=20
 export SUBI_SESSION_MAX_CHARS=20000
 ```
+
+MVP credit settlement uses fixed pricing by default:
+
+```bash
+export SUBI_FIXED_REQUEST_COST_MICROS=1000000
+export SUBI_SELLER_EARNING_MICROS=800000
+export SUBI_PLATFORM_FEE_MICROS=150000
+export SUBI_RESERVE_MICROS=50000
+```
+
+`1000000` micros equals `1` Credit. The current credit order endpoint is a mock
+paid recharge for experiments; real crypto recharge and seller payout are not
+implemented yet.
 
 Run:
 

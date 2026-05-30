@@ -131,9 +131,13 @@ func TestGatewayWebSellerSetupAndDBBackedBuyerKey(t *testing.T) {
 	defer accountStore.Close()
 
 	cfg := gatewayConfig{
-		Store:             accountStore,
-		SessionCookieName: "subi_session",
-		SessionStore:      service.NewSubiSessionStore(20, 20000),
+		Store:               accountStore,
+		SessionCookieName:   "subi_session",
+		SessionStore:        service.NewSubiSessionStore(20, 20000),
+		RequestCostMicros:   store.CreditMicrosPerCredit,
+		SellerEarningMicros: 800_000,
+		PlatformFeeMicros:   150_000,
+		ReserveMicros:       50_000,
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/web/auth/", func(w http.ResponseWriter, r *http.Request) {
@@ -212,6 +216,11 @@ func TestGatewayWebSellerSetupAndDBBackedBuyerKey(t *testing.T) {
 	buyerSecret := gjson.Get(keysResp.Body, "secret").String()
 	require.NotEmpty(t, buyerSecret)
 
+	creditResp := postJSON(t, server.URL+"/api/web/buyer/credits/orders", cookie.String(), map[string]any{
+		"amount_credits": 100,
+	}, http.StatusCreated)
+	require.EqualValues(t, 100*store.CreditMicrosPerCredit, gjson.Get(creditResp.Body, "wallet.balance_micros").Int())
+
 	reqBody, err := json.Marshal(map[string]any{"model": "subi-codex-subscription", "stream": false, "input": "hi"})
 	require.NoError(t, err)
 	req, err := http.NewRequest(http.MethodPost, server.URL+"/v1/responses", bytes.NewReader(reqBody))
@@ -226,6 +235,73 @@ func TestGatewayWebSellerSetupAndDBBackedBuyerKey(t *testing.T) {
 	require.Equal(t, http.StatusOK, buyerResp.StatusCode, string(buyerBody))
 	require.Contains(t, string(buyerBody), "DB_KEY_OK")
 	_ = seller.nextRequest(t)
+
+	balanceResp := getJSON(t, server.URL+"/api/web/buyer/balance", cookie.String(), http.StatusOK)
+	require.EqualValues(t, 99*store.CreditMicrosPerCredit, gjson.Get(balanceResp.Body, "wallet.balance_micros").Int())
+
+	usageResp := getJSON(t, server.URL+"/api/web/buyer/usage", cookie.String(), http.StatusOK)
+	require.Equal(t, "seller-macbook-001", gjson.Get(usageResp.Body, "usage.0.seller_node_id").String())
+	require.EqualValues(t, store.CreditMicrosPerCredit, gjson.Get(usageResp.Body, "usage.0.cost_micros").Int())
+
+	earningsResp := getJSON(t, server.URL+"/api/web/seller/earnings", cookie.String(), http.StatusOK)
+	require.EqualValues(t, 800_000, gjson.Get(earningsResp.Body, "earnings.balance_micros").Int())
+}
+
+func TestGatewayDBBackedBuyerInsufficientCreditsReturns402(t *testing.T) {
+	service.DefaultSubiSellerNodeRegistry = service.NewSubiSellerNodeRegistry()
+	accountStore, err := store.Open(filepath.Join(t.TempDir(), "subi.db"))
+	require.NoError(t, err)
+	defer accountStore.Close()
+
+	cfg := gatewayConfig{
+		Store:               accountStore,
+		SessionCookieName:   "subi_session",
+		SessionStore:        service.NewSubiSessionStore(20, 20000),
+		RequestCostMicros:   store.CreditMicrosPerCredit,
+		SellerEarningMicros: 800_000,
+		PlatformFeeMicros:   150_000,
+		ReserveMicros:       50_000,
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/web/auth/", func(w http.ResponseWriter, r *http.Request) {
+		handleWebAuth(w, r, cfg)
+	})
+	mux.HandleFunc("/api/web/buyer/", func(w http.ResponseWriter, r *http.Request) {
+		handleWebBuyer(w, r, cfg)
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		handleBuyerRequest(w, r, cfg)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	registerResp := postJSON(t, server.URL+"/api/web/auth/register", "", map[string]any{
+		"email":    "buyer-zero@example.com",
+		"password": "password123",
+	}, http.StatusCreated)
+	cookie := registerResp.Cookies()[0]
+	keysResp := postJSON(t, server.URL+"/api/web/buyer/api-keys", cookie.String(), map[string]any{
+		"name": "Codex",
+	}, http.StatusCreated)
+	buyerSecret := gjson.Get(keysResp.Body, "secret").String()
+	require.NotEmpty(t, buyerSecret)
+
+	reqBody, err := json.Marshal(map[string]any{"model": "subi-codex-subscription", "stream": false, "input": "hi"})
+	require.NoError(t, err)
+	req, err := http.NewRequest(http.MethodPost, server.URL+"/v1/responses", bytes.NewReader(reqBody))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", "Bearer "+buyerSecret)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	respBody, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusPaymentRequired, resp.StatusCode, string(respBody))
+	require.Contains(t, string(respBody), "insufficient credits")
+
+	balanceResp := getJSON(t, server.URL+"/api/web/buyer/balance", cookie.String(), http.StatusOK)
+	require.EqualValues(t, 0, gjson.Get(balanceResp.Body, "wallet.balance_micros").Int())
 }
 
 type gatewayTestHarness struct {
@@ -246,6 +322,26 @@ func postJSON(t *testing.T, targetURL, cookie string, payload any, expectedStatu
 	req, err := http.NewRequest(http.MethodPost, targetURL, bytes.NewReader(body))
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
+	if cookie != "" {
+		req.Header.Set("Cookie", cookie)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	respBody, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Equal(t, expectedStatus, resp.StatusCode, string(respBody))
+	return gatewayTestResponse{
+		StatusCode: resp.StatusCode,
+		Header:     resp.Header.Clone(),
+		Body:       string(respBody),
+	}
+}
+
+func getJSON(t *testing.T, targetURL, cookie string, expectedStatus int) gatewayTestResponse {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodGet, targetURL, nil)
+	require.NoError(t, err)
 	if cookie != "" {
 		req.Header.Set("Cookie", cookie)
 	}

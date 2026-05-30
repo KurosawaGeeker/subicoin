@@ -24,7 +24,7 @@
             <button class="active" type="button">中文</button>
             <button type="button">EN</button>
           </div>
-          <button class="login-btn" type="button">登录</button>
+          <button class="login-btn" id="auth-action" type="button">登录</button>
         </div>
       </div>
     </nav>
@@ -43,7 +43,7 @@
           <span>Linux</span>
           <h2>CLI Agent</h2>
           <p>当前 MVP 主路径。构建 seller-agent 二进制文件，然后保持它在后台运行。</p>
-          <button class="primary-action" type="button">开始接入</button>
+          <button class="primary-action" type="button" id="start-onboarding">开始接入</button>
         </article>
         <article class="download-tile">
           <span>macOS</span>
@@ -79,18 +79,18 @@
         </article>
 
         <aside class="client-side-card">
-          <h3>seller-macbook-001</h3>
+          <h3 id="seller-node-title">未登录</h3>
           <div class="node-row">
             <span>状态</span>
-            <b>在线</b>
+            <b id="seller-node-status">--</b>
           </div>
           <div class="node-row">
             <span>模式</span>
-            <b>codex-app-server</b>
+            <b id="seller-node-mode">--</b>
           </div>
           <div class="node-row">
             <span>最大接入数</span>
-            <b>1 worker</b>
+            <b id="seller-node-workers">--</b>
           </div>
           <div class="node-row">
             <span>运行边界</span>

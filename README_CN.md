@@ -84,7 +84,7 @@ make test
 - Subi P2P / session service
 - `subi-gateway`
 - 协议兼容转换
-- SQLite 账号和节点接入存储
+- SQLite 账号、节点接入、Credit 账本和 seller 收益账本
 
 ## Gateway 启动
 
@@ -108,8 +108,16 @@ export SUBI_SELLER_NODE_TOKEN="<seller node token>"
 export SUBI_GATEWAY_ADDR="0.0.0.0:18080"
 export SUBI_DB_PATH="/opt/subi/subi.db"
 export SUBI_PUBLIC_GATEWAY_WS_URL="wss://<gateway-host>/api/v1/subi/seller/agent/ws"
+export SUBI_WEB_DIR="./web"
 
 ./dist/subi-gateway
+```
+
+Gateway 会挂载静态页面：
+
+```text
+GET /buyer/
+GET /seller/
 ```
 
 启用 `SUBI_DB_PATH` 后，Gateway 提供最小 Web API：
@@ -121,11 +129,18 @@ POST /api/web/auth/logout
 GET  /api/web/auth/me
 
 GET  /api/web/buyer/me
+GET  /api/web/buyer/balance
 GET  /api/web/buyer/api-keys
 POST /api/web/buyer/api-keys
 POST /api/web/buyer/api-keys/:id/revoke
+GET  /api/web/buyer/credits/plans
+POST /api/web/buyer/credits/orders
+GET  /api/web/buyer/credits/ledger
+GET  /api/web/buyer/usage
 
 GET  /api/web/seller/me
+GET  /api/web/seller/earnings
+GET  /api/web/seller/activity
 GET  /api/web/seller/nodes
 POST /api/web/seller/nodes
 POST /api/web/seller/nodes/:node_id/setup-token
@@ -149,6 +164,17 @@ export SUBI_SESSION_CONTEXT_ENABLED=true
 export SUBI_SESSION_MAX_TURNS=20
 export SUBI_SESSION_MAX_CHARS=20000
 ```
+
+MVP 默认使用固定 Credit 计费：
+
+```bash
+export SUBI_FIXED_REQUEST_COST_MICROS=1000000
+export SUBI_SELLER_EARNING_MICROS=800000
+export SUBI_PLATFORM_FEE_MICROS=150000
+export SUBI_RESERVE_MICROS=50000
+```
+
+`1000000` micros = `1` Credit。当前 mock 充值接口会直接把订单标记为 paid，用于实验闭环；真实加密货币充值和提现还没有接入。
 
 ## Seller 一站式接入
 
@@ -233,24 +259,23 @@ export OPENAI_API_KEY="<subi buyer key>"
 codex
 ```
 
+## 当前已实现
+
+当前后端已经跑通：
+
+- Buyer Credit 余额和扣费账本
+- 固定价格的 Request Fill 账本
+- Seller 收益账本
+
 ## 当前未完成
 
 这些能力还没有实现，不能按生产能力对外承诺：
 
-- Buyer Credit 余额和扣费账本
-- Seller 收益账本和提现
 - 真实加密货币充值 / 提现
+- Seller 提现
 - 完整 Web 登录页面接真实接口
 - GUI 客户端
 - 多 Gateway 实例共享状态
 - 生产级调度、风控、健康分
 
-当前最稳定的下一步是继续做：
-
-```text
-Buyer Credit wallet
--> Request Fill 账本
--> 成功请求扣费
--> Seller earning ledger
--> Web 页面从 mock 切真实数据
-```
+当前最稳定的下一步是补 buyer/seller dashboard 的浏览器端到端验收，然后再接真实充值和提现。
