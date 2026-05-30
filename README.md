@@ -46,7 +46,7 @@ crypto payment described above — those are MVP-2 / MVP-3 in the PRD roadmap.
 Buyer Codex / OpenAI-compatible client
 -> Subi Gateway
 -> Seller Agent
--> Seller local Codex subscription runtime
+-> Codex backend through seller Codex login state
 -> original response path
 ```
 

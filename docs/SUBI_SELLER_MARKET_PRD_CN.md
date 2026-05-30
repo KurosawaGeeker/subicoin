@@ -14,7 +14,7 @@ Subi 当前代码已经跑通最小 P2P 链路：
 Buyer Codex / OpenAI-compatible client
 -> Subi Gateway
 -> Seller Agent
--> Seller local Codex subscription runtime
+-> 基于卖家 Codex 登录态请求 Codex 后端
 -> Subi Gateway
 -> Buyer
 ```

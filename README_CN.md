@@ -39,14 +39,14 @@ Vendor: OpenAI / Anthropic
 Buyer Codex / OpenAI-compatible client
 -> Subi Gateway
 -> Seller Agent
--> Seller local Codex subscription runtime
+-> 基于卖家 Codex 登录态请求 Codex 后端
 -> 原路返回
 ```
 
 已保留组件：
 
 - `backend/src/cmd/subi-gateway.ts`：Gateway，接收买家 HTTP 请求和卖家 WebSocket 长连接。
-- `backend/src/cmd/seller-agent.ts`：卖家侧 agent，连接 Gateway，并调用本机 upstream。
+- `backend/src/cmd/seller-agent.ts`：卖家侧 agent，连接 Gateway，并基于本机 Codex 登录态做纯网络转发。
 - `backend/src/service/p2p.ts`：seller registry、sticky routing、dispatch、WebSocket envelope。
 - `backend/src/service/session.ts`：可选的 Gateway 托管 session 文本上下文。
 - `backend/src/store.ts`：SQLite 账号、Web session、Buyer API key、Seller node、setup token、Credit 账本和 seller 收益存储。

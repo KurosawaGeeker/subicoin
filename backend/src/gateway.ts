@@ -618,8 +618,7 @@ function handleSellerSetup(req: Request, cfg: GatewayConfig): Response {
       subi_node_id: setup.node_id,
       seller_upstream_mode: setup.provider,
       seller_codex_workers: setup.max_concurrency,
-      seller_codex_workdir: "/tmp/subi-codex-work",
-      seller_codex_sandbox: "read-only",
+      seller_codex_home: "$HOME/.codex",
       seller_config_env: sellerConfigEnv(wsURL, setup),
       seller_agent_configured: true,
     });

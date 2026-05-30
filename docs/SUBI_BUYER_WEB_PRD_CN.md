@@ -14,7 +14,7 @@ Subi 当前核心链路已经跑通：
 Buyer Codex / OpenAI-compatible client
 -> Subi Gateway
 -> Seller Agent
--> Seller local Codex / upstream
+-> 基于卖家 Codex 登录态请求 Codex 后端
 -> Subi Gateway
 -> Buyer
 ```

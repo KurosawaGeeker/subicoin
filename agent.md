@@ -12,7 +12,7 @@ OpenAI/OpenClaw secrets in this file.
 Buyer Codex CLI in GitHub Codespaces
   -> Subi Gateway on AWS EC2 Japan
   -> Seller Agent on seller machine
-  -> Seller local Codex/OpenClaw-capable runtime
+  -> Codex backend through the seller's Codex login state
   -> response returns along the same path
 ```
 
@@ -22,7 +22,7 @@ Buyer Codex CLI in GitHub Codespaces
 | --- | --- | --- | --- | --- |
 | Buyer machine | Buyer/client environment | Codex CLI and repo test scripts | Starts requests to `/v1/responses` | Current buyer is GitHub Codespaces. It should not run `seller-agent` and should not need seller ChatGPT/Codex login state. |
 | Gateway server | Subi relay/control point | `subi-gateway` systemd service | Receives buyer HTTP requests and seller WebSocket connections | Current public host is `13.230.32.216`, AWS EC2 in Japan, listening on TCP `18080`. |
-| Seller machine | Supply-side execution environment | `seller-agent`, local `codex exec` or compatible upstream | Maintains WebSocket to Gateway and executes forwarded requests | Current physical seller machine is in China. It owns the seller-side logged-in runtime. |
+| Seller machine | Supply-side network endpoint | `seller-agent` | Maintains WebSocket to Gateway and forwards Responses requests to Codex with the seller's Codex login state | Current physical seller machine is in China. It owns the seller-side login state; buyer traffic must not get seller cwd, shell, tools, or local runtime access. |
 | Singapore VPS, if used | Optional auxiliary runtime/relay | OpenClaw or other runtime components when explicitly configured | Not the authoritative Subi Gateway unless reconfigured | Treat this as auxiliary until its exact service and host are confirmed in the current run. |
 
 ## Gateway Server

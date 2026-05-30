@@ -81,36 +81,6 @@ path.chmod(0o600)
 print(payload.get("subi_node_id", "seller-node"))
 PY
 
-if CODEX_BIN="$(command -v codex 2>/dev/null)"; then
-  python3 - "$INSTALL_DIR/config.env" "$CODEX_BIN" <<'PY'
-import pathlib
-import shlex
-import sys
-
-path = pathlib.Path(sys.argv[1])
-codex_bin = sys.argv[2]
-lines = path.read_text().splitlines()
-out = []
-seen_bin = False
-seen_app_server_bin = False
-for line in lines:
-    if line.startswith("SELLER_CODEX_BIN="):
-        out.append("SELLER_CODEX_BIN=" + shlex.quote(codex_bin))
-        seen_bin = True
-    elif line.startswith("SELLER_CODEX_APP_SERVER_BIN="):
-        out.append("SELLER_CODEX_APP_SERVER_BIN=" + shlex.quote(codex_bin))
-        seen_app_server_bin = True
-    else:
-        out.append(line)
-if not seen_bin:
-    out.append("SELLER_CODEX_BIN=" + shlex.quote(codex_bin))
-if not seen_app_server_bin:
-    out.append("SELLER_CODEX_APP_SERVER_BIN=" + shlex.quote(codex_bin))
-path.write_text("\n".join(out) + "\n")
-path.chmod(0o600)
-PY
-fi
-
 if [[ -n "$AGENT_PATH" ]]; then
   [[ -x "$AGENT_PATH" ]] || chmod +x "$AGENT_PATH"
   cp "$AGENT_PATH" "$INSTALL_DIR/seller-agent"
