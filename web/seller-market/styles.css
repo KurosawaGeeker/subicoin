@@ -65,6 +65,12 @@ a {
   margin: 0 auto;
 }
 
+.brand-cluster {
+  display: inline-flex;
+  gap: 14px;
+  align-items: center;
+}
+
 .brand {
   display: inline-flex;
   gap: 10px;
@@ -83,6 +89,31 @@ a {
   border-radius: 8px;
   font-size: 14px;
   font-weight: 750;
+}
+
+.role-switcher {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  background: rgba(139, 115, 85, 0.06);
+  border-radius: 999px;
+}
+
+.role-switcher a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 10px;
+  color: var(--faint);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.role-switcher a.active,
+.role-switcher a:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.72);
 }
 
 .nav-links,
