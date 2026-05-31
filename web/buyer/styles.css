@@ -103,11 +103,11 @@ a {
   width: 28px;
   height: 28px;
   place-items: center;
-  color: #fff;
-  background: var(--primary);
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 400;
+  overflow: hidden;
+  color: transparent;
+  background: url("../assets/subi-mark.svg") center / contain no-repeat;
+  font-size: 0;
+  text-indent: -9999px;
 }
 
 .role-switcher {

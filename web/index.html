@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Subi</title>
+    <link rel="icon" href="./assets/subi-mark.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="./seller-market/styles.css" />
     <style>
       body {
@@ -82,11 +83,13 @@
       .entry-brand {
         display: inline-flex;
         align-items: center;
-        gap: 11px;
-        margin-bottom: 30px;
-        color: var(--muted);
-        font-size: 16px;
-        font-weight: 700;
+        gap: 12px;
+        margin-bottom: 32px;
+        color: rgba(96, 87, 77, 0.92);
+        font-size: clamp(19px, 1.7vw, 24px);
+        font-weight: 650;
+        line-height: 1.1;
+        letter-spacing: 0;
       }
 
       .entry-content h1 {
@@ -145,10 +148,8 @@
         backdrop-filter: blur(16px);
       }
 
-      .entry-seller-panel .kicker {
-        margin-bottom: 18px;
-        color: rgba(138, 98, 68, 0.88);
-        font-size: 16px;
+      .entry-seller-panel .entry-brand {
+        margin-bottom: 28px;
       }
 
       .entry-seller-panel h1 {
@@ -199,16 +200,16 @@
         }
 
         .entry-brand {
-          gap: 12px;
-          margin-bottom: 32px;
-          font-size: 21px;
+          gap: 14px;
+          margin-bottom: 36px;
+          font-size: 28px;
         }
 
         .entry-brand .brand-mark {
-          width: 40px;
-          height: 40px;
-          border-radius: 11px;
-          font-size: 19px;
+          width: 46px;
+          height: 46px;
+          border-radius: 12px;
+          font-size: 21px;
         }
 
         .entry-content h1 {
@@ -239,10 +240,6 @@
           margin-top: 62px;
           padding: 12px 22px;
           font-size: 15px;
-        }
-
-        .entry-seller-panel .kicker {
-          font-size: 21px;
         }
 
         .entry-seller-panel h1 {
@@ -279,9 +276,17 @@
           text-align: left;
         }
 
-        .entry-brand,
-        .entry-seller-panel .kicker {
-          font-size: 15px;
+        .entry-brand {
+          gap: 10px;
+          margin-bottom: 24px;
+          font-size: 18px;
+        }
+
+        .entry-brand .brand-mark {
+          width: 36px;
+          height: 36px;
+          border-radius: 10px;
+          font-size: 17px;
         }
 
         .entry-content p {
@@ -352,7 +357,7 @@
       <div class="hero-overlay" aria-hidden="true"></div>
       <div class="entry-stage">
         <section class="entry-content entry-panel is-active" aria-labelledby="entry-title">
-          <div class="entry-brand">
+          <div class="entry-brand hero-brand">
             <span class="brand-mark" aria-hidden="true">S</span>
             <span>分布式 TOKEN 共享平台</span>
           </div>
@@ -366,7 +371,10 @@
         </section>
 
         <section class="entry-seller-panel entry-panel" aria-labelledby="entry-seller-title" aria-hidden="true">
-          <p class="kicker">分布式 TOKEN 共享平台</p>
+          <div class="entry-brand hero-brand">
+            <span class="brand-mark" aria-hidden="true">S</span>
+            <span>分布式 TOKEN 共享平台</span>
+          </div>
           <h1 id="entry-seller-title">开着电脑就能赚钱<br />充分利用闲置订阅</h1>
           <p class="hero-copy">订阅状态留在你的机器，Subi 为你匹配模型请求，然后躺着赚钱。</p>
           <div class="hero-actions">

@@ -84,11 +84,11 @@ a {
   width: 28px;
   height: 28px;
   place-items: center;
-  color: #fff;
-  background: var(--brand);
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 750;
+  overflow: hidden;
+  color: transparent;
+  background: url("../assets/subi-mark.svg") center / contain no-repeat;
+  font-size: 0;
+  text-indent: -9999px;
 }
 
 .role-switcher {
@@ -452,6 +452,27 @@ body.auth-lock {
 .hero .kicker {
   color: rgba(138, 98, 68, 0.84);
   font-size: 16px;
+}
+
+.hero-brand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 0 0 24px;
+  color: rgba(96, 87, 77, 0.92);
+  font-size: clamp(19px, 1.7vw, 24px);
+  font-weight: 650;
+  line-height: 1.1;
+  letter-spacing: 0;
+}
+
+.hero-brand .brand-mark {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  font-size: 19px;
 }
 
 .hero h1 {
@@ -1081,6 +1102,19 @@ body.auth-lock {
     font-size: 21px;
   }
 
+  .hero-brand {
+    gap: 14px;
+    margin-bottom: 28px;
+    font-size: 28px;
+  }
+
+  .hero-brand .brand-mark {
+    width: 46px;
+    height: 46px;
+    border-radius: 12px;
+    font-size: 21px;
+  }
+
   .hero h1 {
     margin-bottom: 28px;
     font-size: 92px;
@@ -1456,6 +1490,19 @@ td code {
   .hero h1 {
     font-size: 42px;
     line-height: 1.04;
+  }
+
+  .hero-brand {
+    gap: 10px;
+    margin-bottom: 24px;
+    font-size: 18px;
+  }
+
+  .hero-brand .brand-mark {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    font-size: 17px;
   }
 
   .hero-copy {
