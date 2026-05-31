@@ -15,8 +15,8 @@
             <span>Subi</span>
           </a>
           <div class="role-switcher" aria-label="切换视角">
-            <a href="../buyer/index.html">买家</a>
-            <a class="active" href="./index.html">卖家</a>
+            <a href="../buyer/index.html">用模型</a>
+            <a class="active" href="./index.html">赚收益</a>
           </div>
         </div>
         <div class="nav-links">
@@ -39,15 +39,15 @@
     <main class="page-main">
       <section class="page-header">
         <a class="back-link" href="./index.html">← 返回首页</a>
-        <h1>给买家一个可替换的便宜 token endpoint。</h1>
+        <h1>给模型使用方一个可替换的便宜 token endpoint。</h1>
         <p>
-          买家继续使用 OpenAI-compatible 客户端原本读取的环境变量名。只需要把值换成 Subi Gateway URL 和 Subi buyer key。
+          使用方继续使用 OpenAI-compatible 客户端原本读取的环境变量名。只需要把值换成 Subi Gateway URL 和 Subi API key。
         </p>
       </section>
 
       <section class="api-grid">
         <article class="api-card">
-          <span class="card-label">买家配置</span>
+          <span class="card-label">使用方配置</span>
           <h2>Codex CLI</h2>
           <div class="code-block">
             <button class="code-copy" type="button">复制</button>
@@ -64,7 +64,7 @@ codex \
         </article>
 
         <article class="api-card">
-          <span class="card-label">卖家节点</span>
+          <span class="card-label">供给节点</span>
           <h2>Provider 节点</h2>
           <div class="code-block">
             <button class="code-copy" type="button">复制</button>
@@ -80,15 +80,15 @@ export SELLER_CODEX_HOME="$HOME/.codex"
       </section>
 
       <section class="docs-card">
-        <h2>买家和卖家都能看懂的错误</h2>
+        <h2>使用方和供给方都能看懂的错误</h2>
         <div class="error-grid">
           <div>
             <strong>401</strong>
-            <span>API key 或 seller token 无效</span>
+            <span>API key 或 node token 无效</span>
           </div>
           <div>
             <strong>402</strong>
-            <span>后续计费流程中代表买家余额不足</span>
+            <span>后续计费流程中代表账户余额不足</span>
           </div>
           <div>
             <strong>429</strong>
@@ -96,11 +96,11 @@ export SELLER_CODEX_HOME="$HOME/.codex"
           </div>
           <div>
             <strong>503</strong>
-            <span>当前没有可用卖家节点</span>
+            <span>当前没有可用供给节点</span>
           </div>
           <div>
             <strong>504</strong>
-            <span>卖家节点或本地 upstream 超时</span>
+            <span>供给节点或本地 upstream 超时</span>
           </div>
           <div>
             <strong>529</strong>

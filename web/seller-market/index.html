@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>Subi 卖家市场</title>
+    <title>Subi 收益网络</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
@@ -15,8 +15,8 @@
             <span>Subi</span>
           </a>
           <div class="role-switcher" aria-label="切换视角">
-            <a href="../buyer/index.html">买家</a>
-            <a class="active" href="./index.html">卖家</a>
+            <a href="../buyer/index.html">用模型</a>
+            <a class="active" href="./index.html">赚收益</a>
           </div>
         </div>
 
@@ -46,7 +46,7 @@
           <p class="kicker">分布式 Token 共享平台</p>
           <h1>开着电脑就能赚钱<br />充分利用闲置订阅</h1>
           <p class="hero-copy">
-            订阅状态留在你的机器，Subi 为你匹配买家，然后躺着赚钱。
+            订阅状态留在你的机器，Subi 为你匹配模型请求，然后躺着赚钱。
           </p>
 
           <div class="hero-actions">
@@ -73,7 +73,7 @@
         <div class="estimate-copy">
           <h2>订阅费可以自己赚回来。</h2>
           <p>
-            保持卖家客户端在线。Subi 按负载路由有效请求，记录每一次 fill，并把账号登录态留在你自己的机器上。
+            保持本地客户端在线。Subi 按负载路由有效请求，记录每一次 fill，并把账号登录态留在你自己的机器上。
           </p>
         </div>
         <article class="estimate-card">
@@ -86,7 +86,7 @@
             <b>-$20/mo</b>
           </div>
           <div class="estimate-line">
-            <span>卖家平均收益</span>
+            <span>节点平均收益</span>
             <b class="positive">+$44/mo</b>
           </div>
         </article>
@@ -100,12 +100,12 @@
           <article class="step-card step-card-large">
             <span>安装</span>
             <h3>邮箱登录</h3>
-            <p>创建卖家账号，绑定后续用于 Subi 结算的钱包。</p>
+            <p>创建 Subi 账号，绑定后续用于结算的钱包。</p>
           </article>
           <div class="step-stack">
             <article class="step-card">
               <span>接入</span>
-              <h3>启动卖家客户端</h3>
+              <h3>启动本地客户端</h3>
               <p>我们不让你在网页上挂账号，而是在你的机器上运行本地后台进程。</p>
             </article>
             <article class="step-card">
@@ -122,13 +122,13 @@
           <article>
             <h2>一个账号。一台机器。一个稳定 IP。</h2>
             <p>
-              Subi 不把你的登录态放进共享账号池。订阅状态留在卖家机器上，Seller Agent 只和 Gateway 保持长连接。
+              Subi 不把你的登录态放进共享账号池。订阅状态留在你的机器上，本地客户端只和 Gateway 保持长连接。
             </p>
           </article>
           <article>
-            <h2>买家的 shell 不会跑在卖家设备上。</h2>
+            <h2>使用者的 shell 不会跑在你的设备上。</h2>
             <p>
-              买家的读文件、改代码和命令执行都在买家本机。卖家客户端只负责把模型请求变成模型响应，并受并发和运行边界限制。
+              使用者的读文件、改代码和命令执行都在自己本机。本地客户端只负责把模型请求变成模型响应，并受并发和运行边界限制。
             </p>
           </article>
         </div>
@@ -136,7 +136,7 @@
 
       <section class="section alt-section cta-section">
         <div class="section-heading">
-          <h2>下载卖家客户端，让节点保持在线。</h2>
+          <h2>下载本地客户端，让节点保持在线。</h2>
         </div>
         <div class="center-actions">
           <a class="primary-action" href="./client.html">开始接入</a>
@@ -146,12 +146,12 @@
 
       <section class="section network-section">
         <div class="section-heading">
-          <h2>为愿意保持机器在线的卖家而建。</h2>
+          <h2>为愿意保持机器在线的贡献者而建。</h2>
         </div>
         <div class="network-stats">
           <article>
             <strong id="home-online-nodes">--</strong>
-            <span>在线卖家节点</span>
+            <span>在线供给节点</span>
           </article>
           <article>
             <strong id="home-request-count">--</strong>
@@ -159,12 +159,12 @@
           </article>
           <article>
             <strong>80/15/5</strong>
-            <span>卖家 / 平台 / 准备金</span>
+            <span>贡献者 / 平台 / 准备金</span>
           </article>
         </div>
         <div class="network-note">
           <p>
-            当前页面会优先读取登录卖家的真实节点和 Request Fill 账本。
+            当前页面会优先读取登录账号的真实节点和 Request Fill 账本。
           </p>
         </div>
       </section>

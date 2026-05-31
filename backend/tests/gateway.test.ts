@@ -206,8 +206,8 @@ describe("Gateway", () => {
     const rootBody = await rootResp.text();
     expect(rootResp.status, rootBody).toBe(200);
     expect(rootResp.headers.get("Content-Type")).toContain("text/html");
-    expect(rootBody).toContain("你是卖家");
-    expect(rootBody).toContain("我是买家");
+    expect(rootBody).toContain("你想用 Subi");
+    expect(rootBody).toContain("使用顶级编程模型");
     expect(rootBody).toContain('id="network-map"');
     expect(rootBody).toContain("./seller-market/app.js");
 

@@ -3,23 +3,23 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Subi 买家控制台</title>
+    <title>Subi 模型接入控制台</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <header class="topbar">
       <div class="topbar-inner">
         <div class="brand-cluster">
-          <a class="brand" href="#dashboard" aria-label="Subi Buyer Console">
+          <a class="brand" href="#dashboard" aria-label="Subi model access console">
             <span class="brand-mark">S</span>
             <span>Subi</span>
           </a>
           <div class="role-switcher" aria-label="Switch Subi console">
-            <a class="active" href="./index.html">Buyer</a>
-            <a href="../seller-market/index.html">Seller</a>
+            <a class="active" href="./index.html">Use models</a>
+            <a href="../seller-market/index.html">Earn</a>
           </div>
         </div>
-        <nav class="nav" aria-label="Buyer navigation">
+        <nav class="nav" aria-label="Model access navigation">
           <a href="#dashboard">Dashboard</a>
           <a href="#credits">Credits</a>
           <a href="#keys">Keys</a>
@@ -52,7 +52,7 @@
           <p class="hero-subcopy">
             充值一次，用同一个 Subi Key 接入 Codex、Claude Code 和常见 OpenAI 兼容客户端。
           </p>
-          <div class="value-strip" aria-label="Buyer value propositions">
+          <div class="value-strip" aria-label="Subi value propositions">
             <span><i data-lucide="wifi" aria-hidden="true"></i>无需梯子</span>
             <span><i data-lucide="badge-percent" aria-hidden="true"></i>最低的价格</span>
             <span><i data-lucide="network" aria-hidden="true"></i>社区供给网络</span>
@@ -69,7 +69,7 @@
           </div>
         </div>
 
-        <aside class="balance-panel" aria-label="Buyer credits overview">
+        <aside class="balance-panel" aria-label="Credits overview">
           <div class="balance-main">
             <span>Your Credits</span>
             <strong id="credit-balance">--</strong>
@@ -142,7 +142,7 @@
           <div>
             <h2 id="access-title">Your Subi access</h2>
             <p class="panel-subcopy">
-              Claude Code does not need a separate key. Use the same Subi buyer key with the
+              Claude Code does not need a separate key. Use the same Subi API key with the
               Anthropic-compatible URL.
             </p>
           </div>
@@ -153,9 +153,9 @@
         </div>
         <div class="copy-grid access-grid">
           <label class="copy-field">
-            <span>SUBI BUYER API KEY</span>
+            <span>SUBI API KEY</span>
             <input id="api-key" readonly type="password" value="Sign in to create a key" />
-            <button class="icon-btn" type="button" data-copy-target="api-key" aria-label="Copy Subi buyer API key">
+            <button class="icon-btn" type="button" data-copy-target="api-key" aria-label="Copy Subi API key">
               <i data-lucide="copy" aria-hidden="true"></i>
             </button>
           </label>
@@ -250,7 +250,7 @@
             <div class="doctor-header">
               <i data-lucide="shield-check" aria-hidden="true"></i>
               <div>
-                <strong>Buyer Doctor</strong>
+                <strong>Access Doctor</strong>
                 <span id="doctor-status">Waiting for sign in</span>
               </div>
             </div>
@@ -258,7 +258,7 @@
               <li><span></span>Subi service ready</li>
               <li><span></span>API key format valid</li>
               <li><span></span>Credits above zero</li>
-              <li><span></span>Seller node available</li>
+              <li><span></span>Supply node available</li>
             </ul>
           </aside>
         </div>
@@ -280,7 +280,7 @@
               <tr>
                 <th>Request</th>
                 <th>Status</th>
-                <th>Seller</th>
+                <th>Node</th>
                 <th>Duration</th>
                 <th>Credits</th>
               </tr>

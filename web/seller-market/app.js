@@ -76,7 +76,7 @@ function providerContent() {
       title: "Codex 订阅",
       tag: "推荐",
       note:
-        "只复用这台机器上的 Codex 登录态发网络请求，不在卖家机器执行买家的工具命令。",
+        "只复用这台机器上的 Codex 登录态发网络请求，不在你的机器执行使用者的工具命令。",
       config: installCommand,
       start: `# 安装完成后，seller-agent 会由 launchd / systemd / nohup 保持运行。`,
     },
@@ -84,17 +84,17 @@ function providerContent() {
       title: "Claude Code 订阅",
       tag: "目标形态",
       note:
-        "Claude Code 卖家模式是产品目标形态。当前 MVP 先保留为等待名单占位。",
+        "Claude Code 供给模式是产品目标形态。当前 MVP 先保留为等待名单占位。",
       config: `# 即将开放
-# 卖家客户端会复用这台机器上的 Claude Code 订阅态。
+# 本地客户端会复用这台机器上的 Claude Code 订阅态。
 # 当前先使用 Codex Provider 完成实验。`,
-      start: `# 该 Provider 开放后，在卖家后台加入等待名单。`,
+      start: `# 该 Provider 开放后，在收益后台加入等待名单。`,
     },
     http: {
       title: "本地 HTTP Upstream",
       tag: "暂停开放",
       note:
-        "当前产品边界只允许使用 Codex 登录态网络请求，本地 HTTP 模式暂不接入买家流量。",
+        "当前产品边界只允许使用 Codex 登录态网络请求，本地 HTTP 模式暂不接入用户流量。",
       config: `# 暂不开放。请使用 Codex 订阅模式。`,
       start: `# 当前真实流量只调度 codex-login 节点。`,
     },
@@ -102,7 +102,7 @@ function providerContent() {
       title: "VPS Headless",
       tag: "常驻在线",
       note:
-        "在 VPS 上运行同一个卖家客户端，可以获得更稳定的在线时间。VPS 是设备，Provider 仍然是 Codex、Claude 或本地 HTTP。",
+        "在 VPS 上运行同一个本地客户端，可以获得更稳定的在线时间。VPS 是设备，Provider 仍然是 Codex、Claude 或本地 HTTP。",
       config: installCommand.replace(nodeID, `${nodeID}-vps`),
       start: `nohup ~/.subi/seller/seller-agent > ~/.subi/seller/seller-agent.log 2>&1 &`,
     },

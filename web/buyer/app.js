@@ -26,9 +26,9 @@ const codeCopyPayloads = new Map();
 
 const i18n = {
   en: {
-    pageTitle: "Subi Buyer Console",
-    buyer: "Buyer",
-    seller: "Seller",
+    pageTitle: "Subi Model Access Console",
+    buyer: "Use models",
+    seller: "Earn",
     dashboard: "Dashboard",
     creditsNav: "Credits",
     setupNav: "Setup",
@@ -51,10 +51,10 @@ const i18n = {
     requests: "Requests",
     accessTitle: "Your Subi access",
     accessCopy:
-      "Claude Code does not need a separate key. Use the same Subi buyer key with the Anthropic-compatible URL.",
+      "Claude Code does not need a separate key. Use the same Subi API key with the Anthropic-compatible URL.",
     revealKey: "Reveal key",
     hideKey: "Hide key",
-    subiBuyerApiKey: "SUBI BUYER API KEY",
+    subiBuyerApiKey: "SUBI API KEY",
     signInCreateKey: "Sign in to create a key",
     newKey: "New key",
     deleteCurrent: "Delete current key",
@@ -100,13 +100,14 @@ const i18n = {
       "Template shows {key}*** on screen, but the full key is not available on this device. Delete and recreate it before copying.",
     providerTemplateNoKey: "Create or select an API key before configuring a client.",
     runDoctor: "Run Doctor",
-    buyerDoctor: "Buyer Doctor",
+    buyerDoctor: "Access Doctor",
     waitingSignIn: "Waiting for sign in",
     liveChecks: "Live account checks",
     subiReady: "Subi service ready",
     keyValid: "API key format valid",
     creditsAboveZero: "Credits above zero",
-    sellerAvailable: "Seller node available",
+    sellerAvailable: "Supply node available",
+    supplyNode: "Node",
     creditActivity: "Credit activity",
     request: "Request",
     duration: "Duration",
@@ -171,13 +172,13 @@ const i18n = {
     openaiCompatible: "OpenAI-compatible",
     curlTitle: "cURL",
     debug: "Debug",
-    providerKeyFallback: "Sign in to create a Subi buyer key",
+    providerKeyFallback: "Sign in to create a Subi API key",
     curlSuccess: "# Success body should include:\nSUBI_BUYER_OK",
   },
   zh: {
-    pageTitle: "Subi 买家控制台",
-    buyer: "买家",
-    seller: "卖家",
+    pageTitle: "Subi 模型接入控制台",
+    buyer: "用模型",
+    seller: "赚收益",
     dashboard: "首页",
     creditsNav: "充值",
     setupNav: "配置",
@@ -199,10 +200,10 @@ const i18n = {
     todaySpend: "今日消耗",
     requests: "请求数",
     accessTitle: "你的 Subi 接入信息",
-    accessCopy: "Claude Code 不需要单独的 key。使用同一个 Subi 买家 key，并填写 Anthropic 兼容地址。",
+    accessCopy: "Claude Code 不需要单独的 key。使用同一个 Subi API key，并填写 Anthropic 兼容地址。",
     revealKey: "显示 key",
     hideKey: "隐藏 key",
-    subiBuyerApiKey: "SUBI 买家 API KEY",
+    subiBuyerApiKey: "SUBI API KEY",
     signInCreateKey: "登录后创建 key",
     newKey: "新建 key",
     deleteCurrent: "删除当前 key",
@@ -245,13 +246,14 @@ const i18n = {
     providerTemplateMissingSecret: "页面显示 {key}***，但本机没有完整密钥。需要复制完整命令时请删除后重新创建。",
     providerTemplateNoKey: "先创建或选择一个 API key，再配置客户端。",
     runDoctor: "运行自检",
-    buyerDoctor: "买家自检",
+    buyerDoctor: "接入自检",
     waitingSignIn: "等待登录",
     liveChecks: "正在读取账号状态",
     subiReady: "Subi 服务可用",
     keyValid: "API key 格式正确",
     creditsAboveZero: "余额大于 0",
-    sellerAvailable: "有卖家节点可用",
+    sellerAvailable: "有供给节点可用",
+    supplyNode: "供给节点",
     creditActivity: "额度使用记录",
     request: "请求",
     duration: "耗时",
@@ -316,7 +318,7 @@ const i18n = {
     openaiCompatible: "OpenAI 兼容",
     curlTitle: "cURL",
     debug: "调试",
-    providerKeyFallback: "登录后创建 Subi 买家 key",
+    providerKeyFallback: "登录后创建 Subi API key",
     curlSuccess: "# 成功返回里应该包含：\nSUBI_BUYER_OK",
   },
 };
@@ -877,7 +879,7 @@ function applyStaticTranslations() {
     if (keyHeaders[index]) keyHeaders[index].textContent = label;
   });
   const usageHeaders = document.querySelectorAll("#usage > .table-wrap th");
-  [t("request"), t("status"), t("seller"), t("duration"), t("creditCost")].forEach((label, index) => {
+  [t("request"), t("status"), t("supplyNode"), t("duration"), t("creditCost")].forEach((label, index) => {
     if (usageHeaders[index]) usageHeaders[index].textContent = label;
   });
   const ledgerHeaders = document.querySelectorAll(".ledger-block th");
