@@ -198,6 +198,25 @@ describe("Gateway", () => {
     const missingResp = await fetch(`${h.baseURL}/api/v1/subi/seller/downloads/not-allowed`);
     expect(missingResp.status).toBe(404);
   });
+
+  test("serves root role chooser and console redirects", async () => {
+    const h = newGatewayTestHarness(true);
+
+    const rootResp = await fetch(`${h.baseURL}/`);
+    const rootBody = await rootResp.text();
+    expect(rootResp.status, rootBody).toBe(200);
+    expect(rootResp.headers.get("Content-Type")).toContain("text/html");
+    expect(rootBody).toContain("你是卖家");
+    expect(rootBody).toContain("我是买家");
+
+    const buyerRedirect = await fetch(`${h.baseURL}/buyer`, { redirect: "manual" });
+    expect(buyerRedirect.status).toBe(307);
+    expect(buyerRedirect.headers.get("Location")).toBe(`${h.baseURL}/buyer/`);
+
+    const sellerRedirect = await fetch(`${h.baseURL}/seller`, { redirect: "manual" });
+    expect(sellerRedirect.status).toBe(307);
+    expect(sellerRedirect.headers.get("Location")).toBe(`${h.baseURL}/seller/`);
+  });
 });
 
 function newGatewayTestHarness(sessionContextEnabled: boolean, store?: Store) {
@@ -219,7 +238,7 @@ function newGatewayTestHarness(sessionContextEnabled: boolean, store?: Store) {
     seller_earning_micros: 800_000,
     platform_fee_micros: 150_000,
     reserve_micros: 50_000,
-    web_dir: "web",
+    web_dir: "../web",
   };
   const server = createGatewayServer(cfg);
   servers.push(server);

@@ -803,6 +803,9 @@ SELLER_CODEX_BASE_URL="https://chatgpt.com/backend-api/codex"`;
 async function handleStatic(req: Request, cfg: GatewayConfig): Promise<Response | undefined> {
   if (req.method !== "GET" && req.method !== "HEAD") return undefined;
   const url = new URL(req.url);
+  if (url.pathname === "/" || url.pathname === "/index.html") {
+    return staticFileResponse(`${cfg.web_dir}/index.html`, "index.html", req.method);
+  }
   if (url.pathname === "/buyer") return Response.redirect(`${url.origin}/buyer/`, 307);
   if (url.pathname === "/seller" || url.pathname === "/seller-market") return Response.redirect(`${url.origin}/seller/`, 307);
 
@@ -817,12 +820,16 @@ async function handleStatic(req: Request, cfg: GatewayConfig): Promise<Response 
   let rel = decodeURIComponent(url.pathname.slice(mapping.prefix.length));
   if (!rel || rel.endsWith("/")) rel += "index.html";
   if (rel.includes("..")) return apiError(404, "endpoint not found");
-  const file = Bun.file(`${mapping.dir}/${rel}`);
+  return staticFileResponse(`${mapping.dir}/${rel}`, rel, req.method);
+}
+
+async function staticFileResponse(path: string, rel: string, method: string): Promise<Response> {
+  const file = Bun.file(path);
   if (!(await file.exists())) return apiError(404, "endpoint not found");
   const headers = new Headers();
   const type = contentType(rel);
   if (type) headers.set("Content-Type", type);
-  return new Response(req.method === "HEAD" ? undefined : file, { headers });
+  return new Response(method === "HEAD" ? undefined : file, { headers });
 }
 
 function contentType(path: string): string {

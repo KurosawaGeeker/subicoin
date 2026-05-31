@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Subi</title>
+    <link rel="stylesheet" href="./seller-market/styles.css" />
+    <style>
+      body {
+        min-height: 100vh;
+        overflow: hidden;
+      }
+
+      .entry-shell {
+        position: relative;
+        display: grid;
+        min-height: 100vh;
+        place-items: center;
+        padding: 32px;
+        background:
+          linear-gradient(rgba(138, 98, 68, 0.045) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(138, 98, 68, 0.045) 1px, transparent 1px),
+          linear-gradient(180deg, #faf8f5 0%, #f1ece5 52%, #faf8f5 100%);
+        background-size: 100% 120px, 120px 100%, auto;
+      }
+
+      .entry-map {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+        opacity: 0.96;
+      }
+
+      .map-shape,
+      .map-node,
+      .map-route {
+        position: absolute;
+        pointer-events: none;
+      }
+
+      .map-shape {
+        background: rgba(138, 98, 68, 0.085);
+        border: 1px solid rgba(44, 44, 44, 0.055);
+        filter: blur(0.2px);
+      }
+
+      .shape-america {
+        left: 3%;
+        top: 22%;
+        width: 28%;
+        height: 30%;
+        clip-path: polygon(0 28%, 32% 0, 78% 2%, 100% 32%, 82% 78%, 40% 92%, 8% 66%);
+      }
+
+      .shape-south {
+        left: 17%;
+        top: 54%;
+        width: 14%;
+        height: 40%;
+        clip-path: polygon(42% 0, 100% 28%, 78% 76%, 22% 100%, 0 48%, 12% 22%);
+      }
+
+      .shape-eurasia {
+        left: 41%;
+        top: 22%;
+        width: 49%;
+        height: 34%;
+        clip-path: polygon(0 20%, 30% 0, 72% 14%, 100% 48%, 88% 92%, 44% 96%, 10% 70%);
+      }
+
+      .shape-africa {
+        left: 45%;
+        top: 47%;
+        width: 18%;
+        height: 42%;
+        clip-path: polygon(0 0, 62% 12%, 80% 58%, 42% 100%, 10% 66%);
+      }
+
+      .shape-aus {
+        left: 76%;
+        top: 72%;
+        width: 16%;
+        height: 17%;
+        clip-path: polygon(16% 0, 70% 14%, 100% 56%, 64% 100%, 0 70%);
+      }
+
+      .map-node {
+        width: 8px;
+        height: 8px;
+        background: rgba(138, 98, 68, 0.55);
+        border-radius: 999px;
+        box-shadow: 0 0 0 8px rgba(196, 149, 106, 0.08), 0 0 18px rgba(138, 98, 68, 0.22);
+      }
+
+      .map-route {
+        height: 2px;
+        background: linear-gradient(90deg, transparent, rgba(138, 98, 68, 0.22), transparent);
+        transform-origin: left center;
+      }
+
+      .entry-focus {
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(circle at 50% 48%, rgba(250, 248, 245, 0.96) 0, rgba(250, 248, 245, 0.82) 28%, rgba(250, 248, 245, 0.28) 52%, rgba(250, 248, 245, 0.08) 100%);
+      }
+
+      .entry-content {
+        position: relative;
+        z-index: 1;
+        width: min(760px, 100%);
+        text-align: center;
+      }
+
+      .entry-brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 28px;
+        color: var(--muted);
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      .entry-content h1 {
+        margin: 0;
+        color: var(--text);
+        font-size: clamp(42px, 7vw, 82px);
+        font-weight: 430;
+        line-height: 1.02;
+        letter-spacing: 0;
+      }
+
+      .entry-content p {
+        max-width: 640px;
+        margin: 26px auto 0;
+        color: var(--muted);
+        font-size: clamp(18px, 2.3vw, 24px);
+        font-weight: 560;
+        line-height: 1.55;
+      }
+
+      .entry-actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 14px;
+        margin-top: 38px;
+      }
+
+      .entry-actions a {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 168px;
+        min-height: 58px;
+        padding: 0 26px;
+        border-radius: 8px;
+        font-size: 18px;
+        font-weight: 760;
+      }
+
+      .entry-actions .primary-action {
+        box-shadow: 0 16px 38px rgba(44, 44, 44, 0.16);
+      }
+
+      .entry-note {
+        display: inline-flex;
+        margin-top: 54px;
+        padding: 10px 18px;
+        color: var(--faint);
+        background: rgba(255, 255, 255, 0.58);
+        border: 1px solid rgba(255, 255, 255, 0.78);
+        border-radius: 999px;
+        font-size: 13px;
+        font-weight: 650;
+        box-shadow: 0 10px 34px rgba(44, 44, 44, 0.06);
+        backdrop-filter: blur(16px);
+      }
+
+      @media (max-width: 720px) {
+        body {
+          overflow: auto;
+        }
+
+        .entry-shell {
+          min-height: 100svh;
+          padding: 24px;
+        }
+
+        .entry-content {
+          text-align: left;
+        }
+
+        .entry-content p {
+          margin-left: 0;
+        }
+
+        .entry-actions {
+          justify-content: stretch;
+        }
+
+        .entry-actions a {
+          width: 100%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="entry-shell">
+      <div class="entry-map" aria-hidden="true">
+        <span class="map-shape shape-america"></span>
+        <span class="map-shape shape-south"></span>
+        <span class="map-shape shape-eurasia"></span>
+        <span class="map-shape shape-africa"></span>
+        <span class="map-shape shape-aus"></span>
+        <span class="map-route" style="left: 26%; top: 42%; width: 23%; transform: rotate(-13deg)"></span>
+        <span class="map-route" style="left: 51%; top: 45%; width: 24%; transform: rotate(9deg)"></span>
+        <span class="map-route" style="left: 65%; top: 56%; width: 18%; transform: rotate(24deg)"></span>
+        <span class="map-node" style="left: 12%; top: 37%"></span>
+        <span class="map-node" style="left: 24%; top: 44%"></span>
+        <span class="map-node" style="left: 49%; top: 37%"></span>
+        <span class="map-node" style="left: 61%; top: 32%"></span>
+        <span class="map-node" style="left: 72%; top: 47%"></span>
+        <span class="map-node" style="left: 83%; top: 79%"></span>
+      </div>
+      <div class="entry-focus" aria-hidden="true"></div>
+      <section class="entry-content" aria-labelledby="entry-title">
+        <div class="entry-brand">
+          <span class="brand-mark" aria-hidden="true">S</span>
+          <span>分布式 TOKEN 共享平台</span>
+        </div>
+        <h1 id="entry-title">你是卖家<br />还是买家？</h1>
+        <p>卖家用闲置订阅赚收益，买家购买额度后用同一个 Subi Key 接入顶级编程模型。</p>
+        <div class="entry-actions">
+          <a class="primary-action" href="/seller/">我是卖家</a>
+          <a class="secondary-action" href="/buyer/">我是买家</a>
+        </div>
+        <div class="entry-note">选择后进入对应控制台</div>
+      </section>
+    </main>
+  </body>
+</html>
