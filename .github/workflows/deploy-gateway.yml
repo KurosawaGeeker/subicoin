@@ -1,0 +1,122 @@
+name: Deploy Subi Gateway
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: subi-gateway-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build and deploy to EC2
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    env:
+      DEPLOY_HOST: ${{ secrets.SUBI_DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.SUBI_DEPLOY_USER }}
+      DEPLOY_PORT: ${{ secrets.SUBI_DEPLOY_PORT }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: cd backend && bun install --frozen-lockfile
+
+      - name: Test
+        run: make test
+
+      - name: Build Linux artifacts
+        run: make build-linux-amd64
+
+      - name: Package deploy bundle
+        run: |
+          set -euo pipefail
+          test -x dist/subi-gateway-linux-amd64
+          test -x dist/seller-agent-linux-amd64
+          tar -czf /tmp/subi-deploy.tgz \
+            dist/subi-gateway-linux-amd64 \
+            dist/seller-agent-linux-amd64 \
+            scripts/install-seller.sh \
+            web
+
+      - name: Configure SSH
+        run: |
+          set -euo pipefail
+          if [[ -z "${DEPLOY_HOST}" || -z "${DEPLOY_USER}" ]]; then
+            echo "SUBI_DEPLOY_HOST and SUBI_DEPLOY_USER secrets are required" >&2
+            exit 1
+          fi
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.SUBI_DEPLOY_SSH_KEY }}" > ~/.ssh/subi-deploy-key
+          chmod 600 ~/.ssh/subi-deploy-key
+          if [[ -n "${{ secrets.SUBI_DEPLOY_KNOWN_HOSTS }}" ]]; then
+            printf '%s\n' "${{ secrets.SUBI_DEPLOY_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          else
+            ssh-keyscan -p "${DEPLOY_PORT:-22}" "${DEPLOY_HOST}" > ~/.ssh/known_hosts
+          fi
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Upload bundle
+        run: |
+          set -euo pipefail
+          scp -P "${DEPLOY_PORT:-22}" \
+            -i ~/.ssh/subi-deploy-key \
+            -o IdentitiesOnly=yes \
+            /tmp/subi-deploy.tgz \
+            "${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/subi-deploy-${GITHUB_SHA}.tgz"
+
+      - name: Install and restart gateway
+        run: |
+          set -euo pipefail
+          ssh -p "${DEPLOY_PORT:-22}" \
+            -i ~/.ssh/subi-deploy-key \
+            -o IdentitiesOnly=yes \
+            "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "GITHUB_SHA='${GITHUB_SHA}' bash -s" <<'REMOTE'
+          set -euo pipefail
+
+          archive="/tmp/subi-deploy-${GITHUB_SHA}.tgz"
+          release="/tmp/subi-deploy-${GITHUB_SHA}"
+          rm -rf "${release}"
+          mkdir -p "${release}"
+          tar -xzf "${archive}" -C "${release}"
+
+          sudo install -d -m 755 /opt/subi /opt/subi/dist /opt/subi/scripts /opt/subi/web
+          sudo install -m 755 "${release}/dist/subi-gateway-linux-amd64" /opt/subi/subi-gateway.next
+          sudo install -m 755 "${release}/dist/seller-agent-linux-amd64" /opt/subi/dist/seller-agent-linux-amd64
+          sudo install -m 755 "${release}/scripts/install-seller.sh" /opt/subi/scripts/install-seller.sh
+          sudo rsync -a --delete "${release}/web/" /opt/subi/web/
+          sudo mv -f /opt/subi/subi-gateway.next /opt/subi/subi-gateway
+
+          sudo systemctl restart subi-gateway
+          sudo systemctl is-active --quiet subi-gateway
+
+          rm -rf "${release}" "${archive}"
+          REMOTE
+
+      - name: Health check
+        run: |
+          set -euo pipefail
+          for _ in {1..30}; do
+            if curl -fsS "http://${DEPLOY_HOST}:18080/health"; then
+              echo
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Gateway health check failed" >&2
+          exit 1
