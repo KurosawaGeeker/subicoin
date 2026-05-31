@@ -14,6 +14,11 @@ const sellerState = {
   consoleConfigs: loadConsoleConfigs(),
   expandedConsoleNodeID: "",
   setupByNode: {},
+  accessDraft: {
+    open: false,
+    provider: "codex",
+    max_buyers: 1,
+  },
 };
 
 const creditMicros = 1_000_000;
@@ -22,7 +27,7 @@ const doctorPassedMessage = "自检通过，随时可以接单赚钱。";
 const noExpandedConsoleNode = "__subi_no_expanded_console_node__";
 const consoleProviderOptions = [
   { value: "codex", label: "Codex", backend: "codex-login" },
-  { value: "claude", label: "Claude", backend: "claude-code" },
+  { value: "claude", label: "Claude Code", backend: "claude-code" },
   { value: "chatgpt", label: "ChatGPT", backend: "codex-login" },
   { value: "cursor", label: "Cursor", backend: "codex-login" },
   { value: "other", label: "Other", backend: "codex-login" },
@@ -133,10 +138,19 @@ function consoleConfigForNode(node) {
   if (!node?.node_id) {
     return defaultConsoleConfig(node);
   }
-  return {
+  const config = {
     ...defaultConsoleConfig(node),
     ...(sellerState.consoleConfigs[node.node_id] || {}),
   };
+  if (config.subscription_provider === "claude") {
+    if (config.subscription_label === "Claude 订阅") {
+      config.subscription_label = "Claude Code 订阅";
+    }
+    if (String(config.display_name || "").startsWith("Claude 节点")) {
+      config.display_name = String(config.display_name).replace("Claude 节点", "Claude Code 节点");
+    }
+  }
+  return config;
 }
 
 function updateConsoleConfig(nodeID, patch) {
@@ -545,9 +559,29 @@ document.addEventListener("click", (event) => {
     return;
   }
 
-  const addConsoleNode = event.target.closest("#add-seller-node, [data-console-add]");
-  if (addConsoleNode) {
-    createSellerConsoleNode();
+  const startConsoleAccess = event.target.closest("#start-console-access, [data-console-start]");
+  if (startConsoleAccess) {
+    openConsoleAccessPanel();
+    return;
+  }
+
+  const accessProvider = event.target.closest("[data-access-provider]");
+  if (accessProvider) {
+    sellerState.accessDraft.provider = accessProvider.dataset.accessProvider || "codex";
+    renderSellerAccessPanel();
+    return;
+  }
+
+  const accessCancel = event.target.closest("[data-access-cancel]");
+  if (accessCancel) {
+    sellerState.accessDraft.open = false;
+    renderSellerAccessPanel();
+    return;
+  }
+
+  const accessGenerate = event.target.closest("[data-access-generate]");
+  if (accessGenerate) {
+    createSellerConsoleAccessNode();
     return;
   }
 
@@ -644,6 +678,12 @@ document.addEventListener("click", (event) => {
 });
 
 document.addEventListener("input", (event) => {
+  const accessMaxBuyers = event.target.closest("[data-access-max-buyers]");
+  if (accessMaxBuyers) {
+    sellerState.accessDraft.max_buyers = Number(accessMaxBuyers.value || 1);
+    return;
+  }
+
   const field = event.target.closest("[data-console-field]");
   if (field) {
     updateConsoleField(field);
@@ -871,7 +911,7 @@ function renderConsoleSummary() {
   if (!document.querySelector("#console-online-nodes")) {
     return;
   }
-  const nodes = sellerState.nodes;
+  const nodes = visibleConsoleNodes();
   const configs = new Map(nodes.map((node) => [node.node_id, consoleConfigForNode(node)]));
   const onlineNodes = nodes.filter((node) => node.status === "online").length;
   const currentBuyers = nodes.reduce((sum, node) => sum + nodeCurrentBuyers(node), 0);
@@ -890,7 +930,7 @@ function renderConsoleSummary() {
   const reason = !sellerState.user
     ? "登录后加载节点"
     : nodes.length === 0
-      ? "添加 Seller 节点后开始配置"
+      ? "开始接入后生成节点"
       : accepting
         ? accepting.reason
         : firstBlocked?.reason || "当前没有可用节点";
@@ -1197,68 +1237,147 @@ function renderConsoleNode(node) {
   `;
 }
 
+function visibleConsoleNodes() {
+  return sellerState.nodes.filter((node) => {
+    const config = consoleConfigForNode(node);
+    return node.status !== "created" || Boolean(config.access_started_at) || Boolean(sellerState.setupByNode[node.node_id]);
+  });
+}
+
+function renderSellerAccessPanel() {
+  const panel = document.querySelector("#console-access-panel");
+  if (!panel) {
+    return;
+  }
+  if (!sellerState.accessDraft.open) {
+    panel.hidden = true;
+    panel.innerHTML = "";
+    return;
+  }
+  const provider = sellerState.accessDraft.provider || "codex";
+  panel.hidden = false;
+  panel.innerHTML = `
+    <div class="console-access-heading">
+      <div>
+        <span class="card-label">接入方式</span>
+        <h2>选择这台设备要跑的订阅账号。</h2>
+        <p>生成命令后，Seller 节点会进入列表。把命令复制到对应设备执行，设备上线后状态会变为在线。</p>
+      </div>
+      <button class="secondary-action compact-action" type="button" data-access-cancel>取消</button>
+    </div>
+    <div class="access-provider-grid" role="group" aria-label="订阅类型">
+      <button class="${provider === "codex" ? "active" : ""}" type="button" data-access-provider="codex">
+        <span>Codex</span>
+        <strong>Codex 订阅</strong>
+        <small>使用 seller 设备上的 Codex 登录态。</small>
+      </button>
+      <button class="${provider === "claude" ? "active" : ""}" type="button" data-access-provider="claude">
+        <span>Claude Code</span>
+        <strong>Claude Code 订阅</strong>
+        <small>使用 seller 设备上的 Claude Code 凭据。</small>
+      </button>
+    </div>
+    <div class="console-access-footer">
+      <label class="console-field">
+        <span>最大接入 buyer 数</span>
+        <input type="number" min="1" max="3" value="${escapeHtml(String(sellerState.accessDraft.max_buyers || 1))}" data-access-max-buyers />
+        <small>第一版建议 1-3。</small>
+      </label>
+      <button class="primary-action" type="button" data-access-generate>生成并复制接入指令</button>
+    </div>
+  `;
+}
+
 function renderSellerConsole() {
   renderConsoleSummary();
+  renderSellerAccessPanel();
   const list = document.querySelector("#seller-console-list");
   if (!list) {
     return;
   }
+  const nodes = visibleConsoleNodes();
   if (!sellerState.user) {
     list.innerHTML = `
       <article class="console-empty">
         <h2>登录后加载 Seller 节点。</h2>
-        <p>控制台会按节点展示机器、订阅账号、运行时间、接单能力、余额保护和收益。</p>
-        <button class="primary-action" type="button" data-console-add>登录并添加节点</button>
+        <p>登录后点击「开始接入」，选择 Codex 或 Claude Code 并复制该设备的接入指令。</p>
+        <button class="primary-action" type="button" data-console-start>登录并开始接入</button>
       </article>
     `;
     return;
   }
-  if (sellerState.nodes.length === 0) {
+  if (nodes.length === 0) {
     list.innerHTML = `
       <article class="console-empty">
-        <h2>还没有 Seller 节点。</h2>
-        <p>先添加一个待接入节点，再复制这一行的接入指令到对应设备上运行。</p>
-        <button class="primary-action" type="button" data-console-add>添加 Seller 节点</button>
+        <h2>还没有接入节点。</h2>
+        <p>先点击「开始接入」，选择 Codex 或 Claude Code。生成接入指令后，该 Seller 节点才会进入列表。</p>
+        <button class="primary-action" type="button" data-console-start>开始接入</button>
       </article>
     `;
     return;
   }
   if (
     sellerState.expandedConsoleNodeID !== noExpandedConsoleNode &&
-    (!sellerState.expandedConsoleNodeID || !sellerState.nodes.some((node) => node.node_id === sellerState.expandedConsoleNodeID))
+    (!sellerState.expandedConsoleNodeID || !nodes.some((node) => node.node_id === sellerState.expandedConsoleNodeID))
   ) {
-    sellerState.expandedConsoleNodeID = sellerState.nodes[0].node_id;
+    sellerState.expandedConsoleNodeID = nodes[0].node_id;
   }
-  list.innerHTML = sellerState.nodes.map(renderConsoleNode).join("");
+  list.innerHTML = nodes.map(renderConsoleNode).join("");
 }
 
 function consoleNodeByID(nodeID) {
   return sellerState.nodes.find((node) => node.node_id === nodeID);
 }
 
-async function createSellerConsoleNode() {
+function openConsoleAccessPanel() {
+  if (!sellerState.user) {
+    openAuthModal("login");
+    return;
+  }
+  sellerState.accessDraft.open = true;
+  renderSellerAccessPanel();
+}
+
+async function createSellerConsoleAccessNode() {
   if (!sellerState.user) {
     openAuthModal("login");
     return;
   }
   const nodeID = defaultConsoleNodeID();
-  const displayName = `Seller 节点 ${sellerState.nodes.length + 1}`;
-  const config = { ...defaultConsoleConfig({ node_id: nodeID }), display_name: displayName };
+  const provider = sellerState.accessDraft.provider || "codex";
+  const maxBuyers = Math.max(1, Math.min(3, Number(sellerState.accessDraft.max_buyers || 1)));
+  const displayName = `${providerLabel(provider)} 节点 ${visibleConsoleNodes().length + 1}`;
+  const config = {
+    ...defaultConsoleConfig({ node_id: nodeID, provider: backendProviderFromValue(provider), max_concurrency: maxBuyers }),
+    display_name: displayName,
+    subscription_provider: provider,
+    subscription_label: `${providerLabel(provider)} 订阅`,
+    max_buyers: maxBuyers,
+  };
   try {
     const payload = await api("/api/web/seller/nodes", {
       method: "POST",
       body: {
         node_id: nodeID,
-        provider: backendProviderFromValue(config.subscription_provider),
-        max_concurrency: Number(config.max_buyers || 1),
+        provider: backendProviderFromValue(provider),
+        max_concurrency: maxBuyers,
       },
     });
-    updateConsoleConfig(payload.node.node_id, config);
+    const setup = await api(`/api/web/seller/nodes/${encodeURIComponent(payload.node.node_id)}/setup-token`, {
+      method: "POST",
+      body: {},
+    });
+    sellerState.setupByNode[payload.node.node_id] = {
+      ...setup,
+      copied_at: new Date().toISOString(),
+    };
+    updateConsoleConfig(payload.node.node_id, { ...config, access_started_at: new Date().toISOString() });
+    await copyText(setup.install_command || setup.install_command_unix || "");
     sellerState.nodes = [payload.node, ...sellerState.nodes];
     sellerState.activeNode = payload.node;
     sellerState.expandedConsoleNodeID = payload.node.node_id;
+    sellerState.accessDraft.open = false;
     renderAll();
-    showToast("Seller 节点已添加");
   } catch (error) {
     showToast(error.message);
   }
@@ -1303,6 +1422,7 @@ async function copyConsoleNodeAccess(nodeID) {
       ...setup,
       copied_at: new Date().toISOString(),
     };
+    updateConsoleConfig(node.node_id, { access_started_at: new Date().toISOString() });
     await copyText(setup.install_command || setup.install_command_unix || "");
     renderAll();
   } catch (error) {

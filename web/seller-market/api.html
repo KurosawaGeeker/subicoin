@@ -72,16 +72,18 @@
 
       <section class="console-toolbar">
         <div>
-          <span class="card-label">Seller 节点</span>
-          <h2>一个 seller 账户可以绑定多个设备节点。</h2>
+          <span class="card-label">开始接入</span>
+          <h2>先选择订阅类型并生成接入指令，节点才会进入列表。</h2>
         </div>
-        <button class="primary-action" id="add-seller-node" type="button">添加 Seller 节点</button>
+        <button class="primary-action" id="start-console-access" type="button">开始接入</button>
       </section>
+
+      <section class="console-access-panel" id="console-access-panel" hidden></section>
 
       <section class="seller-node-list" id="seller-console-list" aria-live="polite">
         <article class="console-empty">
           <h2>登录后加载 Seller 节点。</h2>
-          <p>每个节点都能单独配置机器、订阅账号、接单时间、余额保护和接入指令。</p>
+          <p>点击「开始接入」，选择 Codex 或 Claude Code 后生成命令。生成后该节点才会出现在这里。</p>
         </article>
       </section>
 

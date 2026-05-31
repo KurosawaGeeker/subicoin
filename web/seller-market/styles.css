@@ -1615,6 +1615,7 @@ td code {
 
 .console-stat,
 .console-toolbar,
+.console-access-panel,
 .seller-node-card,
 .console-empty,
 .console-reference,
@@ -1703,6 +1704,81 @@ td code {
 
 .console-empty .primary-action {
   margin-top: 18px;
+}
+
+.console-access-panel {
+  margin-bottom: 18px;
+  padding: 22px;
+}
+
+.console-access-panel[hidden] {
+  display: none;
+}
+
+.console-access-heading {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.console-access-heading h2 {
+  margin: 8px 0 8px;
+  color: var(--text);
+  font-size: 24px;
+  font-weight: 300;
+  line-height: 1.2;
+}
+
+.console-access-heading p,
+.access-provider-grid small {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.access-provider-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.access-provider-grid button {
+  display: grid;
+  gap: 8px;
+  min-height: 132px;
+  padding: 16px;
+  text-align: left;
+  background: rgba(139, 115, 85, 0.05);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.access-provider-grid button.active {
+  background: rgba(168, 125, 90, 0.1);
+  border-color: rgba(168, 125, 90, 0.28);
+}
+
+.access-provider-grid span {
+  color: var(--brand);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.access-provider-grid strong {
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.console-access-footer {
+  display: grid;
+  grid-template-columns: minmax(0, 220px) auto;
+  gap: 12px;
+  align-items: end;
 }
 
 .seller-node-card {
@@ -2068,6 +2144,9 @@ td code {
   .api-grid,
   .error-grid,
   .console-summary,
+  .console-access-heading,
+  .access-provider-grid,
+  .console-access-footer,
   .seller-node-row,
   .seller-node-meta,
   .console-field-grid {
@@ -2075,6 +2154,7 @@ td code {
   }
 
   .console-toolbar,
+  .console-access-heading,
   .seller-node-actions {
     align-items: stretch;
     flex-direction: column;
