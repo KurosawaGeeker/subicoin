@@ -40,29 +40,27 @@
     <main class="page-main">
       <section class="page-header">
         <a class="back-link" href="./index.html">← 返回首页</a>
-        <h1>启动本地进程，把你的电脑变成收益节点。</h1>
+        <h1>把 Seller Agent 跑在服务器上，保持 24 小时在线接单。</h1>
         <p>
-          Subi 不要求你把账号挂到网页上。订阅登录态留在你的设备里，本地客户端只和 Gateway 保持一条长连接。
+          同一条一键命令可以粘贴到服务器或个人电脑终端执行。更推荐放在服务器后台：订阅登录态留在运行机器里，Agent 只和 Gateway 保持长连接。
         </p>
       </section>
 
       <section class="download-row">
         <article class="download-tile active">
-          <span>Linux</span>
-          <h2>CLI Agent</h2>
-          <p>当前 MVP 主路径。复制一键命令，安装脚本会写入本机配置并保持本地后台进程常驻。</p>
+          <span>终端命令</span>
+          <h2>一条命令接入</h2>
+          <p>开始接入后生成安装命令，把它复制到准备接单的机器终端里执行，服务器和个人电脑的安装启动行为完全一致。</p>
+          <div class="vps-recommendation">
+            <strong>推荐使用服务器 24 小时常驻</strong>
+            <p>Seller Agent 运行在服务器后台可以持续在线接单。个人电脑也可以用同一命令接入。随时可停止。</p>
+          </div>
           <button class="primary-action" type="button" id="start-onboarding">开始接入</button>
         </article>
         <article class="download-tile">
           <span>macOS</span>
           <h2>GUI 客户端</h2>
           <p>菜单栏常驻、Provider 状态、自动重连和收益查看。</p>
-          <button class="secondary-action" type="button" disabled>Coming soon</button>
-        </article>
-        <article class="download-tile">
-          <span>VPS</span>
-          <h2>后台常驻</h2>
-          <p>适合 24 小时供给。可以用独立 install-dir 和 service-name 跑 canary 节点。</p>
           <button class="secondary-action" type="button" disabled>Coming soon</button>
         </article>
       </section>
@@ -75,12 +73,6 @@
             </button>
             <button type="button" role="tab" aria-selected="false" data-provider="claude">
               Claude
-            </button>
-            <button type="button" role="tab" aria-selected="false" data-provider="http">
-              HTTP
-            </button>
-            <button type="button" role="tab" aria-selected="false" data-provider="vps">
-              VPS
             </button>
           </div>
           <div id="provider-content" aria-live="polite"></div>
@@ -105,7 +97,7 @@
             <b>只读沙箱</b>
           </div>
           <div class="doctor-capsule">
-            <button class="secondary-action full-width" id="run-doctor" type="button">运行自检</button>
+            <button class="primary-action full-width" id="run-doctor" type="button">运行自检</button>
             <div class="doctor-panel" id="seller-doctor-panel" hidden></div>
           </div>
         </aside>

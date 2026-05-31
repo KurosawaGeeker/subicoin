@@ -150,6 +150,8 @@ describe("Gateway", () => {
     const nodeResp = await postJSON(`${h.baseURL}/api/web/seller/nodes`, { node_id: "seller-macbook-001", max_concurrency: 1 }, 201, cookie);
     expect(nodeResp.json.node.node_id).toBe("seller-macbook-001");
     const setupResp = await postJSON(`${h.baseURL}/api/web/seller/nodes/seller-macbook-001/setup-token`, {}, 201, cookie);
+    expect(setupResp.json.install_command_unix).toContain("/api/v1/subi/seller/install.sh");
+    expect(setupResp.json.install_command_windows).toContain("/api/v1/subi/seller/install.ps1");
     const setup = await getJSON(`${h.baseURL}/api/v1/subi/seller/setup?token=${setupResp.json.setup_token}`, 200);
     expect(setup.json.subi_node_id).toBe("seller-macbook-001");
 
@@ -216,6 +218,7 @@ describe("Gateway", () => {
 
     const doctor = await postJSON(`${h.baseURL}/api/web/seller/nodes/seller-doctor-codex/doctor`, {}, 200, account.cookie);
     expect(doctor.json.status).toBe("passed");
+    expect(doctor.json.next_action).toBe("自检通过，随时可以接单赚钱。");
     expect(doctor.json.provider).toBe("codex-login");
     expect(doctor.json.checks.some((check: any) => check.id === "codex_probe" && check.status === "passed")).toBe(true);
     const req = await seller.nextRequest();
@@ -293,6 +296,11 @@ describe("Gateway", () => {
     const installScript = await installResp.text();
     expect(installResp.status, installScript).toBe(200);
     expect(installScript).toContain("--service-name");
+
+    const windowsInstallResp = await fetch(`${h.baseURL}/api/v1/subi/seller/install.ps1`);
+    const windowsInstallScript = await windowsInstallResp.text();
+    expect(windowsInstallResp.status, windowsInstallScript).toBe(200);
+    expect(windowsInstallScript).toContain("Install-SubiSeller");
 
     const downloadResp = await fetch(`${h.baseURL}/api/v1/subi/seller/downloads/seller-agent`);
     const downloadBody = await downloadResp.text();

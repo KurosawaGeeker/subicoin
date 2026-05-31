@@ -1,5 +1,6 @@
 import { isStoreError } from "./errors";
 import sellerInstallScript from "../cmd/subi-gateway/assets/install-seller.sh" with { type: "text" };
+import sellerWindowsInstallScript from "../cmd/subi-gateway/assets/install-seller.ps1" with { type: "text" };
 import { dirname, join } from "node:path";
 import {
   bagToHeaders,
@@ -181,6 +182,7 @@ async function handleGatewayRequest(req: Request, cfg: GatewayConfig): Promise<R
   if (url.pathname.startsWith("/api/web/seller/")) return handleWebSeller(req, cfg);
   if (url.pathname === "/api/v1/subi/seller/setup") return handleSellerSetup(req, cfg);
   if (url.pathname === "/api/v1/subi/seller/install.sh") return handleSellerInstallScript(req);
+  if (url.pathname === "/api/v1/subi/seller/install.ps1") return handleSellerWindowsInstallScript(req);
   if (url.pathname.startsWith("/api/v1/subi/seller/downloads/")) return handleSellerDownload(req);
   return handleBuyerRequest(req, cfg);
 }
@@ -633,9 +635,18 @@ async function handleWebSeller(req: Request, cfg: GatewayConfig): Promise<Respon
       const nodeID = url.pathname.slice("/api/web/seller/nodes/".length, -"/setup-token".length);
       if (!nodeID) return apiError(404, "endpoint not found");
       const setup = cfg.store.createSellerSetupToken(user.id, decodeURIComponent(nodeID), 30 * 60 * 1000);
-      const setupURL = `${requestBaseURL(req)}/api/v1/subi/seller/setup?token=${setup.setup_token}`;
-      const installCommand = `curl -fsSL ${requestBaseURL(req)}/api/v1/subi/seller/install.sh | bash -s -- --gateway ${requestBaseURL(req)} --setup-token ${setup.setup_token}`;
-      return jsonResponse({ setup_token: setup.setup_token, expires_at: setup.expires_at, setup_url: setupURL, install_command: installCommand }, 201);
+      const baseURL = requestBaseURL(req);
+      const setupURL = `${baseURL}/api/v1/subi/seller/setup?token=${setup.setup_token}`;
+      const installCommandUnix = `curl -fsSL ${baseURL}/api/v1/subi/seller/install.sh | bash -s -- --gateway ${baseURL} --setup-token ${setup.setup_token}`;
+      const installCommandWindows = `iwr -UseBasicParsing ${baseURL}/api/v1/subi/seller/install.ps1 | iex; Install-SubiSeller -Gateway ${powerShellSingleQuote(baseURL)} -SetupToken ${powerShellSingleQuote(setup.setup_token)}`;
+      return jsonResponse({
+        setup_token: setup.setup_token,
+        expires_at: setup.expires_at,
+        setup_url: setupURL,
+        install_command: installCommandUnix,
+        install_command_unix: installCommandUnix,
+        install_command_windows: installCommandWindows,
+      }, 201);
     }
     return apiError(404, "endpoint not found");
   } catch (error) {
@@ -803,7 +814,7 @@ async function runCodexSellerDoctor(node: SellerNode): Promise<SellerDoctorProbe
   if (statusCode >= 200 && statusCode < 300 && upstreamMode === "codex-login" && responseText.includes(sellerDoctorExpected)) {
     return {
       status: "passed",
-      next_action: "自检通过，可以保持 seller-agent 在线等待平台派单。",
+      next_action: "自检通过，随时可以接单赚钱。",
       check: {
         id: "codex_probe",
         label: "Codex 上游",
@@ -950,10 +961,32 @@ async function handleSellerInstallScript(req: Request): Promise<Response> {
   });
 }
 
+async function handleSellerWindowsInstallScript(req: Request): Promise<Response> {
+  if (req.method !== "GET") return apiError(405, "method not allowed");
+  const candidates = [
+    "cmd/subi-gateway/assets/install-seller.ps1",
+    "backend/cmd/subi-gateway/assets/install-seller.ps1",
+    "../backend/cmd/subi-gateway/assets/install-seller.ps1",
+    "scripts/install-seller.ps1",
+    "../scripts/install-seller.ps1",
+    "/opt/subi/scripts/install-seller.ps1",
+    "/opt/subi-canary/scripts/install-seller.ps1",
+  ];
+  for (const path of candidates) {
+    const file = Bun.file(path);
+    if (await file.exists()) {
+      return new Response(file, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
+    }
+  }
+  return new Response(sellerWindowsInstallScript, {
+    headers: { "Content-Type": "text/plain; charset=utf-8" },
+  });
+}
+
 async function handleSellerDownload(req: Request): Promise<Response> {
   if (req.method !== "GET") return apiError(405, "method not allowed");
   const name = decodeURIComponent(new URL(req.url).pathname.split("/").pop() || "");
-  const allowed = new Set(["seller-agent-darwin-arm64", "seller-agent-linux-amd64", "seller-agent"]);
+  const allowed = new Set(["seller-agent-darwin-arm64", "seller-agent-linux-amd64", "seller-agent-windows-x64.exe", "seller-agent"]);
   if (!allowed.has(name)) return apiError(404, "seller download not found");
   const executableDir = dirname(process.execPath);
   const candidates = [
@@ -983,6 +1016,10 @@ function requireWebUser(req: Request, cfg: GatewayConfig): User {
   const cookie = cookieValue(req.headers.get("cookie"), cfg.session_cookie_name);
   if (!cookie) throw new Error("login required");
   return cfg.store!.userBySession(cookie);
+}
+
+function powerShellSingleQuote(value: string): string {
+  return `'${value.replaceAll("'", "''")}'`;
 }
 
 function storeErrorResponse(error: unknown, fallback: string): Response {

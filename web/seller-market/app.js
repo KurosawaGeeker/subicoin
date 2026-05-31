@@ -13,6 +13,7 @@ const sellerState = {
 
 const creditMicros = 1_000_000;
 const refreshIntervalMS = 5000;
+const doctorPassedMessage = "自检通过，随时可以接单赚钱。";
 
 function doctorResult(status, nextAction, checks, code = "") {
   return {
@@ -82,42 +83,62 @@ function oneShotInstallCommand() {
   return `${command}${canaryFlags}`;
 }
 
+function powerShellQuote(value) {
+  return `'${String(value).replaceAll("'", "''")}'`;
+}
+
+function windowsCanaryFlags() {
+  return window.location.port === "18081"
+    ? ` -InstallDir "$env:USERPROFILE\\.subi\\seller-canary" -ServiceName "subi-seller-canary"`
+    : "";
+}
+
+function windowsInstallCommand() {
+  if (sellerState.setup?.install_command_windows) {
+    return `${sellerState.setup.install_command_windows}${windowsCanaryFlags()}`;
+  }
+  if (!sellerState.setup?.setup_token) {
+    if (!sellerState.user) {
+      return "# 登录后生成 Windows Terminal 命令";
+    }
+    if (!sellerState.activeNode) {
+      return "# 点击“开始接入”创建节点并生成 Windows Terminal 命令";
+    }
+    return "# 点击“开始接入”生成 Windows Terminal 命令";
+  }
+  const gateway = window.location.origin;
+  return `iwr -UseBasicParsing ${gateway}/api/v1/subi/seller/install.ps1 | iex; Install-SubiSeller -Gateway ${powerShellQuote(gateway)} -SetupToken ${powerShellQuote(sellerState.setup.setup_token)}${windowsCanaryFlags()}`;
+}
+
+function installCommands() {
+  return [
+    {
+      label: "Windows Terminal",
+      code: windowsInstallCommand(),
+    },
+    {
+      label: "macOS / Linux / Unix",
+      code: oneShotInstallCommand(),
+    },
+  ];
+}
+
 function providerContent() {
-  const nodeID = sellerState.activeNode?.node_id || defaultNodeID();
-  const installCommand = oneShotInstallCommand();
+  const commands = installCommands();
   return {
     codex: {
       title: "Codex 订阅",
       tag: "推荐",
       note:
         "只复用这台机器上的 Codex 登录态发网络请求，不在你的机器执行使用者的工具命令。",
-      config: installCommand,
-      start: `# 安装完成后，seller-agent 会由 launchd / systemd / nohup 保持运行。`,
+      commands,
     },
     claude: {
       title: "Claude Code 订阅",
       tag: "Anthropic Messages",
       note:
         "复用这台机器上的 Claude Code 凭据、claude setup-token、ANTHROPIC_AUTH_TOKEN 或 ANTHROPIC_API_KEY，只转发 Anthropic Messages 请求。",
-      config: installCommand,
-      start: `# macOS 上请先运行 claude setup-token，并把输出写入 config.env 的 SELLER_CLAUDE_CODE_OAUTH_TOKEN。
-# 也可以设置 SELLER_ANTHROPIC_AUTH_TOKEN / SELLER_ANTHROPIC_API_KEY。`,
-    },
-    http: {
-      title: "本地 HTTP Upstream",
-      tag: "暂停开放",
-      note:
-        "当前产品边界只允许使用 Codex 登录态或 Claude Code 凭据网络请求，本地 HTTP 模式暂不接入用户流量。",
-      config: `# 暂不开放。请使用 Codex 或 Claude Code 订阅模式。`,
-      start: `# 当前真实流量只调度 codex-login 和 claude-code 节点。`,
-    },
-    vps: {
-      title: "VPS Headless",
-      tag: "常驻在线",
-      note:
-        "在 VPS 上运行同一个本地客户端，可以获得更稳定的在线时间。VPS 是设备，Provider 仍然是 Codex、Claude 或本地 HTTP。",
-      config: installCommand.replace(nodeID, `${nodeID}-vps`),
-      start: `nohup ~/.subi/seller/seller-agent > ~/.subi/seller/seller-agent.log 2>&1 &`,
+      commands,
     },
   };
 }
@@ -144,13 +165,20 @@ function renderProvider(providerKey) {
       <span class="tag">${provider.tag}</span>
     </div>
     <p class="provider-note">${escapeHtml(provider.note)}</p>
-    <div class="code-block">
-      <button class="code-copy" type="button">复制</button>
-      <pre><code>${escapeHtml(provider.config)}</code></pre>
-    </div>
-    <div class="code-block">
-      <button class="code-copy" type="button">复制</button>
-      <pre><code>${escapeHtml(provider.start)}</code></pre>
+    <div class="command-list">
+      ${provider.commands
+        .map(
+          (command) => `
+            <div class="code-block">
+              <div class="code-heading">
+                <span>${escapeHtml(command.label)}</span>
+                <button class="code-copy" type="button">复制</button>
+              </div>
+              <pre><code>${escapeHtml(command.code)}</code></pre>
+            </div>
+          `,
+        )
+        .join("")}
     </div>
   `;
 }
@@ -309,8 +337,10 @@ document.addEventListener("click", (event) => {
 
   const codeCopy = event.target.closest(".code-copy");
   if (codeCopy) {
-    const code = codeCopy.parentElement.querySelector("code");
-    copyText(code.textContent);
+    const code = codeCopy.closest(".code-block")?.querySelector("code");
+    if (code) {
+      copyText(code.textContent);
+    }
     return;
   }
 
@@ -368,6 +398,47 @@ function renderClientState() {
   renderDoctorResult();
 }
 
+function doctorProblemText(result) {
+  const checks = Array.isArray(result.checks) ? result.checks : [];
+  const problemChecks = result.status === "passed" ? [] : checks.filter((check) => check.status !== "passed");
+  if (problemChecks.length === 0) {
+    return result.status === "passed" ? doctorPassedMessage : "自检未通过，但没有返回具体问题。";
+  }
+  return problemChecks
+    .map((check) => {
+      const label = check.label || check.id || "检查项";
+      const message = check.message || check.code || "未返回具体说明。";
+      return `${label}：${message}`;
+    })
+    .join("；");
+}
+
+function doctorStatusLabel(status) {
+  return status === "passed" ? "通过" : "失败";
+}
+
+function renderDoctorResultContent(result, problemText, adviceText) {
+  if (result.status === "passed") {
+    return `
+      <div class="doctor-result-section">
+        <span class="doctor-result-status">${escapeHtml(doctorStatusLabel(result.status))}</span>
+        <p>${escapeHtml(doctorPassedMessage)}</p>
+      </div>
+    `;
+  }
+  return `
+    <div class="doctor-result-section">
+      <span class="doctor-result-status">${escapeHtml(doctorStatusLabel(result.status))}</span>
+      <p>${escapeHtml(problemText)}</p>
+    </div>
+    <div class="doctor-result-divider" aria-hidden="true"></div>
+    <div class="doctor-result-section">
+      <span class="doctor-result-label">建议</span>
+      <p>${escapeHtml(adviceText)}</p>
+    </div>
+  `;
+}
+
 function renderDoctorResult() {
   const panel = document.querySelector("#seller-doctor-panel");
   if (!panel) {
@@ -380,37 +451,13 @@ function renderDoctorResult() {
     return;
   }
 
-  const labels = {
-    passed: "通过",
-    failed: "失败",
-    blocked: "未完成",
-  };
-  const checks = Array.isArray(result.checks) ? result.checks : [];
-  const visibleChecks = result.status === "passed" ? [] : checks.filter((check) => check.status !== "passed");
-  const checksMarkup = visibleChecks.length
-    ? `
-      <div class="doctor-checks">
-        ${visibleChecks
-          .map(
-            (check) => `
-              <div class="doctor-check ${escapeHtml(check.status || "blocked")}">
-                <span>${escapeHtml(check.label || check.id || "检查项")}</span>
-                <b>${escapeHtml(labels[check.status] || "未完成")}</b>
-                <p>${escapeHtml(check.message || "")}</p>
-              </div>
-            `,
-          )
-          .join("")}
-      </div>
-    `
-    : "";
+  const problemText = doctorProblemText(result);
+  const adviceText = result.next_action || "查看问题后重试。";
   panel.hidden = false;
   panel.innerHTML = `
-    <div class="doctor-summary ${escapeHtml(result.status || "blocked")}">
-      <span>${escapeHtml(labels[result.status] || "未完成")}</span>
-      <p>${escapeHtml(result.next_action || "查看分项结果后重试。")}</p>
+    <div class="doctor-result ${escapeHtml(result.status || "blocked")}">
+      ${renderDoctorResultContent(result, problemText, adviceText)}
     </div>
-    ${checksMarkup}
   `;
 }
 
