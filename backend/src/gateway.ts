@@ -1,4 +1,6 @@
 import { isStoreError } from "./errors";
+import sellerInstallScript from "../cmd/subi-gateway/assets/install-seller.sh" with { type: "text" };
+import { dirname, join } from "node:path";
 import {
   bagToHeaders,
   defaultSubiSellerNodeRegistry,
@@ -22,7 +24,7 @@ import {
   SubiSessionStore,
   subiSessionHash,
 } from "./service/session";
-import { creditMicrosPerCredit, Store, storeErrorStatus, type AuthenticatedBuyerKey, type SellerSetupConfig, type User } from "./store";
+import { creditMicrosPerCredit, Store, storeErrorStatus, type AuthenticatedBuyerKey, type SellerNode, type SellerSetupConfig, type User } from "./store";
 import {
   apiError,
   clearCookieHeader,
@@ -45,6 +47,9 @@ import {
 const defaultAddr = "0.0.0.0:18080";
 const defaultRequestTimeoutMS = 600_000;
 const defaultMaxRequestBodyLen = 256 << 20;
+const sellerDoctorExpected = "SUBI_SELLER_DOCTOR_OK";
+const sellerDoctorTimeoutMS = 30_000;
+const sellerDoctorModel = "gpt-5.5";
 
 export interface GatewayConfig {
   addr: string;
@@ -73,6 +78,29 @@ interface SocketData {
     onNodeDisconnected?: (nodeID: string) => void;
   };
 }
+
+type SellerDoctorStatus = "passed" | "failed" | "blocked";
+
+interface SellerDoctorCheck {
+  id: string;
+  label: string;
+  status: SellerDoctorStatus;
+  message: string;
+  code?: string;
+}
+
+interface SellerDoctorProbeResult {
+  check: SellerDoctorCheck;
+  status: SellerDoctorStatus;
+  code?: string;
+  next_action: string;
+}
+
+type SellerDoctorStrategy = (node: SellerNode) => Promise<SellerDoctorProbeResult>;
+
+const sellerDoctorStrategies: Record<string, SellerDoctorStrategy> = {
+  "codex-login": runCodexSellerDoctor,
+};
 
 export function loadGatewayConfig(): GatewayConfig {
   const dbPath = envString("SUBI_DB_PATH");
@@ -596,6 +624,11 @@ async function handleWebSeller(req: Request, cfg: GatewayConfig): Promise<Respon
       const node = cfg.store.createSellerNode(user.id, body.node_id, body.provider, Number(body.max_concurrency || 0));
       return jsonResponse({ node }, 201);
     }
+    if (req.method === "POST" && url.pathname.startsWith("/api/web/seller/nodes/") && url.pathname.endsWith("/doctor")) {
+      const nodeID = url.pathname.slice("/api/web/seller/nodes/".length, -"/doctor".length);
+      if (!nodeID) return apiError(404, "endpoint not found");
+      return await runSellerNodeDoctor(cfg, user, decodeURIComponent(nodeID));
+    }
     if (req.method === "POST" && url.pathname.startsWith("/api/web/seller/nodes/") && url.pathname.endsWith("/setup-token")) {
       const nodeID = url.pathname.slice("/api/web/seller/nodes/".length, -"/setup-token".length);
       if (!nodeID) return apiError(404, "endpoint not found");
@@ -608,6 +641,267 @@ async function handleWebSeller(req: Request, cfg: GatewayConfig): Promise<Respon
   } catch (error) {
     return storeErrorResponse(error, "seller request failed");
   }
+}
+
+async function runSellerNodeDoctor(cfg: GatewayConfig, user: User, nodeID: string): Promise<Response> {
+  const startedAt = Date.now();
+  const node = cfg.store!.getSellerNode(user.id, nodeID);
+  if (!node) return apiError(404, "seller node not found");
+
+  const checks: SellerDoctorCheck[] = [
+    { id: "web_login", label: "网页登录", status: "passed", message: "当前卖家账号已登录。" },
+    { id: "node_created", label: "节点创建", status: "passed", message: `节点 ${node.node_id} 已创建。` },
+  ];
+
+  if (node.provider !== "codex-login") {
+    checks.push({
+      id: "provider_doctor",
+      label: "Provider 自检",
+      status: "blocked",
+      code: "provider_not_ready",
+      message: `${sellerProviderLabel(node.provider)} 自检暂未开放。`,
+    });
+    return sellerDoctorJSON(node, checks, "blocked", "当前版本只开放 Codex 订阅自检，请切换到 Codex 节点。", startedAt, "provider_not_ready");
+  }
+
+  if (node.status === "created") {
+    checks.push({
+      id: "setup_redeemed",
+      label: "安装配置",
+      status: "blocked",
+      code: "setup_not_redeemed",
+      message: "安装命令尚未兑换 setup token。",
+    });
+    return sellerDoctorJSON(node, checks, "blocked", "重新复制安装命令，并在卖家机器上完成安装。", startedAt, "setup_not_redeemed");
+  }
+  checks.push({ id: "setup_redeemed", label: "安装配置", status: "passed", message: "setup token 已兑换，节点 token 已写入本机配置。" });
+
+  const snapshot = defaultSubiSellerNodeRegistry.getNodeSnapshot(node.node_id);
+  if (!snapshot) {
+    checks.push({
+      id: "agent_online",
+      label: "Seller Agent",
+      status: "blocked",
+      code: "agent_offline",
+      message: "seller-agent 当前未连接 Gateway。",
+    });
+    return sellerDoctorJSON(node, checks, "blocked", "启动或重启本机 seller-agent，然后刷新节点状态。", startedAt, "agent_offline");
+  }
+  checks.push({ id: "agent_online", label: "Seller Agent", status: "passed", message: "seller-agent 已连接 Gateway。" });
+
+  if (snapshot.stale) {
+    checks.push({
+      id: "agent_heartbeat",
+      label: "心跳",
+      status: "blocked",
+      code: "agent_stale",
+      message: "seller-agent 心跳已过期。",
+    });
+    return sellerDoctorJSON(node, checks, "blocked", "重启 seller-agent，确认网络能访问 Gateway WebSocket。", startedAt, "agent_stale");
+  }
+  checks.push({ id: "agent_heartbeat", label: "心跳", status: "passed", message: "最近心跳正常。" });
+
+  if (snapshot.active_requests >= snapshot.max_concurrency) {
+    checks.push({
+      id: "agent_capacity",
+      label: "Worker",
+      status: "blocked",
+      code: "agent_busy",
+      message: `当前 ${snapshot.active_requests}/${snapshot.max_concurrency} worker 正在处理请求。`,
+    });
+    return sellerDoctorJSON(node, checks, "blocked", "等待当前请求完成后再运行自检。", startedAt, "agent_busy");
+  }
+  checks.push({ id: "agent_capacity", label: "Worker", status: "passed", message: `${snapshot.max_concurrency} worker 可接入。` });
+
+  const strategy = sellerDoctorStrategies[node.provider];
+  if (!strategy) {
+    checks.push({
+      id: "provider_doctor",
+      label: "Provider 自检",
+      status: "blocked",
+      code: "provider_not_ready",
+      message: `${sellerProviderLabel(node.provider)} 自检暂未开放。`,
+    });
+    return sellerDoctorJSON(node, checks, "blocked", "当前版本只开放 Codex 订阅自检。", startedAt, "provider_not_ready");
+  }
+
+  const probe = await strategy(node);
+  checks.push(probe.check);
+  return sellerDoctorJSON(node, checks, probe.status, probe.next_action, startedAt, probe.code);
+}
+
+async function runCodexSellerDoctor(node: SellerNode): Promise<SellerDoctorProbeResult> {
+  const requestID = `subi_doctor_${Date.now()}${Math.floor(Math.random() * 1_000_000)}`;
+  const body = new TextEncoder().encode(
+    JSON.stringify({
+      model: sellerDoctorModel,
+      instructions: `You are a diagnostic responder. Reply exactly with ${sellerDoctorExpected} and no extra text.`,
+      input: [{ role: "user", content: `Reply exactly: ${sellerDoctorExpected}` }],
+      stream: true,
+      store: false,
+    }),
+  );
+
+  let dispatch;
+  try {
+    dispatch = defaultSubiSellerNodeRegistry.dispatchToNode(node.node_id, {
+      request_id: requestID,
+      method: "POST",
+      path: "/v1/responses",
+      headers: { "Content-Type": ["application/json"], "X-Subi-Doctor": ["seller-codex"] },
+      body,
+      stream: true,
+      timeout_ms: sellerDoctorTimeoutMS,
+      session_hash: `seller-doctor-${sha256Hex(requestID)}`,
+      meta: { diagnostic: true, doctor_provider: "codex-login" },
+    });
+  } catch (error) {
+    return sellerDoctorDispatchError(error);
+  }
+
+  let statusCode = 0;
+  let upstreamMode = "";
+  let errorMessage = "";
+  const parts: Uint8Array[] = [];
+  try {
+    for await (const ev of dispatch.events) {
+      switch (ev.type) {
+        case subiEnvelopeResponseStart:
+          statusCode = ev.status_code && ev.status_code > 0 ? ev.status_code : 200;
+          upstreamMode = headerBagGet(ev.headers, "X-Subi-Upstream-Mode");
+          break;
+        case subiEnvelopeResponseChunk:
+          if (ev.data?.length) parts.push(ev.data);
+          break;
+        case subiEnvelopeResponseError:
+          errorMessage = ev.error || "seller-agent 返回自检错误";
+          break;
+        case subiEnvelopeResponseEnd:
+          break;
+      }
+    }
+  } finally {
+    dispatch.done();
+  }
+
+  const responseText = new TextDecoder().decode(concatBytes(parts));
+  if (errorMessage) {
+    return {
+      status: "failed",
+      code: "codex_probe_error",
+      next_action: codexDoctorNextAction(statusCode, errorMessage),
+      check: {
+        id: "codex_probe",
+        label: "Codex 上游",
+        status: "failed",
+        code: "codex_probe_error",
+        message: truncateText(errorMessage, 240),
+      },
+    };
+  }
+
+  if (statusCode >= 200 && statusCode < 300 && upstreamMode === "codex-login" && responseText.includes(sellerDoctorExpected)) {
+    return {
+      status: "passed",
+      next_action: "自检通过，可以保持 seller-agent 在线等待平台派单。",
+      check: {
+        id: "codex_probe",
+        label: "Codex 上游",
+        status: "passed",
+        message: "Codex Responses probe 返回预期标记。",
+      },
+    };
+  }
+
+  const code = statusCode === 401 || statusCode === 403 ? "codex_auth_failed" : "codex_probe_failed";
+  return {
+    status: "failed",
+    code,
+    next_action: codexDoctorNextAction(statusCode, responseText),
+    check: {
+      id: "codex_probe",
+      label: "Codex 上游",
+      status: "failed",
+      code,
+      message: codexDoctorFailureMessage(statusCode, upstreamMode, responseText),
+    },
+  };
+}
+
+function sellerDoctorDispatchError(error: unknown): SellerDoctorProbeResult {
+  if (error instanceof SubiP2PError) {
+    const blockedCodes = new Set(["agent_busy", "node_not_found", "agent_stale", "provider_mismatch"]);
+    const status: SellerDoctorStatus = blockedCodes.has(error.code) ? "blocked" : "failed";
+    return {
+      status,
+      code: error.code,
+      next_action: error.code === "agent_busy" ? "等待当前请求完成后再运行自检。" : "检查 seller-agent 是否在线，并确认节点 provider 是 codex-login。",
+      check: {
+        id: "codex_probe",
+        label: "Codex 上游",
+        status,
+        code: error.code,
+        message: error.message,
+      },
+    };
+  }
+  return {
+    status: "failed",
+    code: "codex_probe_error",
+    next_action: "查看 seller-agent 日志后重试。",
+    check: {
+      id: "codex_probe",
+      label: "Codex 上游",
+      status: "failed",
+      code: "codex_probe_error",
+      message: String(error),
+    },
+  };
+}
+
+function sellerDoctorJSON(node: SellerNode, checks: SellerDoctorCheck[], status: SellerDoctorStatus, nextAction: string, startedAt: number, code?: string): Response {
+  return jsonResponse({
+    status,
+    code,
+    provider: node.provider,
+    node_id: node.node_id,
+    checks,
+    next_action: nextAction,
+    duration_ms: Date.now() - startedAt,
+  });
+}
+
+function sellerProviderLabel(provider: string): string {
+  switch (provider) {
+    case "codex-login":
+      return "Codex";
+    case "claude-code":
+      return "Claude Code";
+    default:
+      return provider || "当前 Provider";
+  }
+}
+
+function codexDoctorFailureMessage(statusCode: number, upstreamMode: string, responseText: string): string {
+  if (statusCode === 401 || statusCode === 403) return `Codex probe 被上游拒绝：HTTP ${statusCode}。`;
+  if (upstreamMode && upstreamMode !== "codex-login") return `Codex probe 返回了非 Codex provider：${upstreamMode}。`;
+  if (statusCode >= 200 && statusCode < 300) return `Codex probe 未返回预期标记。响应预览：${truncateText(responseText, 180)}`;
+  if (statusCode > 0) return `Codex probe 返回 HTTP ${statusCode}。响应预览：${truncateText(responseText, 180)}`;
+  return `Codex probe 没有收到有效响应。响应预览：${truncateText(responseText, 180)}`;
+}
+
+function codexDoctorNextAction(statusCode: number, text: string): string {
+  const lower = text.toLowerCase();
+  if (statusCode === 401 || statusCode === 403 || lower.includes("auth") || lower.includes("token") || lower.includes("codex chatgpt")) {
+    return "检查本机 Codex ChatGPT 登录态，确认 ~/.codex/auth.json 可读，然后重启 seller-agent。";
+  }
+  return "查看 seller-agent 日志和网络连接后重试。";
+}
+
+function truncateText(value: string, maxLen: number): string {
+  const text = value.replace(/\s+/g, " ").trim();
+  if (text.length <= maxLen) return text || "-";
+  return `${text.slice(0, maxLen - 3)}...`;
 }
 
 function handleSellerSetup(req: Request, cfg: GatewayConfig): Response {
@@ -651,7 +945,7 @@ async function handleSellerInstallScript(req: Request): Promise<Response> {
       return new Response(file, { headers: { "Content-Type": "text/x-shellscript; charset=utf-8" } });
     }
   }
-  return new Response("#!/usr/bin/env bash\nset -euo pipefail\necho 'seller install script is not packaged'\n", {
+  return new Response(sellerInstallScript, {
     headers: { "Content-Type": "text/x-shellscript; charset=utf-8" },
   });
 }
@@ -661,7 +955,9 @@ async function handleSellerDownload(req: Request): Promise<Response> {
   const name = decodeURIComponent(new URL(req.url).pathname.split("/").pop() || "");
   const allowed = new Set(["seller-agent-darwin-arm64", "seller-agent-linux-amd64", "seller-agent"]);
   if (!allowed.has(name)) return apiError(404, "seller download not found");
+  const executableDir = dirname(process.execPath);
   const candidates = [
+    join(executableDir, name),
     `downloads/${name}`,
     `dist/${name}`,
     `../dist/${name}`,

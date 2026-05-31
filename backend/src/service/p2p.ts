@@ -12,13 +12,16 @@ export const defaultSubiAgentStaleAfterMS = 45_000;
 export const defaultSubiRequestTimeoutMS = 600_000;
 
 export class SubiP2PError extends Error {
-  constructor(readonly code: "no_available_node" | "agent_busy", message: string) {
+  constructor(readonly code: "no_available_node" | "agent_busy" | "node_not_found" | "agent_stale" | "provider_mismatch", message: string) {
     super(message);
   }
 }
 
 export const errNoAvailableNode = () => new SubiP2PError("no_available_node", "subi p2p: no available seller node");
 export const errAgentBusy = () => new SubiP2PError("agent_busy", "subi p2p: seller node is busy");
+export const errNodeNotFound = (nodeID: string) => new SubiP2PError("node_not_found", `subi p2p: seller node is not connected: ${nodeID}`);
+export const errAgentStale = (nodeID: string) => new SubiP2PError("agent_stale", `subi p2p: seller node heartbeat is stale: ${nodeID}`);
+export const errProviderMismatch = (nodeID: string) => new SubiP2PError("provider_mismatch", `subi p2p: seller node cannot handle this path: ${nodeID}`);
 
 export interface SubiEnvelope {
   type: string;
@@ -52,6 +55,7 @@ export interface SubiP2PRequest {
   session_hash?: string;
   previous_seller_node?: string;
   timeout_ms?: number;
+  meta?: Record<string, unknown>;
 }
 
 export interface SubiP2PResponseEvent {
@@ -71,6 +75,16 @@ export interface SubiP2PDispatch {
   session_migrated: boolean;
   events: AsyncQueue<SubiP2PResponseEvent>;
   done: () => void;
+}
+
+export interface SubiSellerNodeSnapshot {
+  node_id: string;
+  version: string;
+  upstream_mode: string;
+  max_concurrency: number;
+  active_requests: number;
+  last_seen_ms: number;
+  stale: boolean;
 }
 
 export interface SubiSellerNodeHooks {
@@ -135,6 +149,10 @@ export class SubiSellerNodeRegistry {
   reserveNodeForPathForTest(sessionHash: string, requestID: string, path: string): { nodeID: string; previousNodeID: string } {
     const result = this.reserveNode(sessionHash, requestID, path);
     return { nodeID: result.node.id, previousNodeID: result.previousNodeID };
+  }
+
+  dispatchToNodeForTest(nodeID: string, req: SubiP2PRequest): SubiP2PDispatch {
+    return this.dispatchToNode(nodeID, req);
   }
 
   releaseRequestForTest(nodeID: string, requestID: string): void {
@@ -211,54 +229,31 @@ export class SubiSellerNodeRegistry {
   }
 
   dispatch(req: SubiP2PRequest): SubiP2PDispatch {
-    const timeout = req.timeout_ms && req.timeout_ms > 0 ? req.timeout_ms : defaultSubiRequestTimeoutMS;
     const requestID = trim(req.request_id) || newSubiP2PRequestID();
-    const state: RequestState = { queue: new AsyncQueue<SubiP2PResponseEvent>(), closed: false };
     const reservation = this.reserveNode(trim(req.session_hash), requestID, req.path);
     const node = reservation.node;
-    this.requests.set(requestID, state);
-
-    const done = once(() => this.releaseRequest(node.id, requestID));
     const previousNodeID = trim(req.previous_seller_node) || reservation.previousNodeID;
-    const env: SubiEnvelope = {
-      type: subiEnvelopeRequestStart,
-      request_id: requestID,
-      method: req.method,
-      path: req.path,
-      headers: req.headers,
-      body: req.body,
-      stream: req.stream,
-      timeout_ms: timeout,
-      session_hash: trim(req.session_hash),
-    };
-    if (trim(req.session_id) || previousNodeID) {
-      env.meta = {
-        session_id: trim(req.session_id),
-        previous_seller_node: previousNodeID,
-        session_migrated: previousNodeID !== "" && previousNodeID !== node.id,
-      };
-    }
+    return this.sendToReservedNode(req, requestID, node, previousNodeID, previousNodeID !== "" && previousNodeID !== node.id);
+  }
 
-    try {
-      if (!node.socket) throw new Error("seller node socket is not connected");
-      sendEnvelope(node.socket, env);
-    } catch (error) {
-      done();
-      throw error;
-    }
+  dispatchToNode(nodeID: string, req: SubiP2PRequest): SubiP2PDispatch {
+    const requestID = trim(req.request_id) || newSubiP2PRequestID();
+    const node = this.reserveSpecificNode(trim(nodeID), requestID, req.path);
+    return this.sendToReservedNode(req, requestID, node, "", false);
+  }
 
-    void (async () => {
-      await delay(timeout);
-      this.failRequest(node.id, requestID, "seller agent request timeout");
-    })();
-
+  getNodeSnapshot(nodeID: string): SubiSellerNodeSnapshot | undefined {
+    const node = this.nodes.get(trim(nodeID));
+    if (!node) return undefined;
+    prepareSellerNode(node);
     return {
-      request_id: requestID,
       node_id: node.id,
-      previous_seller_node: previousNodeID,
-      session_migrated: previousNodeID !== "" && previousNodeID !== node.id,
-      events: state.queue,
-      done,
+      version: node.version,
+      upstream_mode: node.upstreamMode,
+      max_concurrency: node.maxConcurrency,
+      active_requests: node.activeRequests.size,
+      last_seen_ms: node.lastSeen,
+      stale: Date.now() - node.lastSeen > defaultSubiAgentStaleAfterMS,
     };
   }
 
@@ -326,6 +321,64 @@ export class SubiSellerNodeRegistry {
       return { node, previousNodeID };
     }
     throw errNoAvailableNode();
+  }
+
+  private reserveSpecificNode(nodeID: string, requestID: string, path: string): SellerNode {
+    const node = this.nodes.get(nodeID);
+    if (!node || !node.socket) throw errNodeNotFound(nodeID);
+    if (Date.now() - node.lastSeen > defaultSubiAgentStaleAfterMS) throw errAgentStale(nodeID);
+    if (!nodeDispatchable(node, path)) throw errProviderMismatch(nodeID);
+    if (!nodeHasCapacity(node)) throw errAgentBusy();
+    reserveNodeRequest(node, requestID);
+    return node;
+  }
+
+  private sendToReservedNode(req: SubiP2PRequest, requestID: string, node: SellerNode, previousNodeID: string, sessionMigrated: boolean): SubiP2PDispatch {
+    const timeout = req.timeout_ms && req.timeout_ms > 0 ? req.timeout_ms : defaultSubiRequestTimeoutMS;
+    const state: RequestState = { queue: new AsyncQueue<SubiP2PResponseEvent>(), closed: false };
+    this.requests.set(requestID, state);
+
+    const done = once(() => this.releaseRequest(node.id, requestID));
+    const meta = { ...(req.meta ?? {}) };
+    if (trim(req.session_id) || previousNodeID) {
+      meta.session_id = trim(req.session_id);
+      meta.previous_seller_node = previousNodeID;
+      meta.session_migrated = sessionMigrated;
+    }
+    const env: SubiEnvelope = {
+      type: subiEnvelopeRequestStart,
+      request_id: requestID,
+      method: req.method,
+      path: req.path,
+      headers: req.headers,
+      body: req.body,
+      stream: req.stream,
+      timeout_ms: timeout,
+      session_hash: trim(req.session_hash),
+    };
+    if (Object.keys(meta).length > 0) env.meta = meta;
+
+    try {
+      if (!node.socket) throw new Error("seller node socket is not connected");
+      sendEnvelope(node.socket, env);
+    } catch (error) {
+      done();
+      throw error;
+    }
+
+    void (async () => {
+      await delay(timeout);
+      this.failRequest(node.id, requestID, "seller agent request timeout");
+    })();
+
+    return {
+      request_id: requestID,
+      node_id: node.id,
+      previous_seller_node: previousNodeID,
+      session_migrated: sessionMigrated,
+      events: state.queue,
+      done,
+    };
   }
 
   private deliverAgentEvent(nodeID: string, env: SubiEnvelope): void {

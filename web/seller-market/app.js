@@ -6,11 +6,25 @@ const sellerState = {
   activeProvider: "codex",
   earnings: null,
   activity: [],
+  doctorResult: null,
+  doctorRunning: false,
   refreshing: false,
 };
 
 const creditMicros = 1_000_000;
 const refreshIntervalMS = 5000;
+
+function doctorResult(status, nextAction, checks, code = "") {
+  return {
+    status,
+    code,
+    provider: onboardingProvider(),
+    node_id: sellerState.activeNode?.node_id || "",
+    duration_ms: 0,
+    next_action: nextAction,
+    checks,
+  };
+}
 
 function formatCredits(micros) {
   const credits = Number(micros || 0) / creditMicros;
@@ -329,7 +343,7 @@ document.addEventListener("click", (event) => {
 });
 
 document.querySelector("#run-doctor")?.addEventListener("click", () => {
-  showToast(sellerState.user ? "自检通过" : "请先登录");
+  runSellerDoctor();
 });
 
 function renderAuth() {
@@ -351,6 +365,53 @@ function renderClientState() {
   setText("#seller-node-mode", node?.provider || "--");
   setText("#seller-node-workers", node ? `${node.max_concurrency || 1} worker` : "--");
   renderProvider();
+  renderDoctorResult();
+}
+
+function renderDoctorResult() {
+  const panel = document.querySelector("#seller-doctor-panel");
+  if (!panel) {
+    return;
+  }
+  const result = sellerState.doctorResult;
+  if (!result) {
+    panel.hidden = true;
+    panel.innerHTML = "";
+    return;
+  }
+
+  const labels = {
+    passed: "通过",
+    failed: "失败",
+    blocked: "未完成",
+  };
+  const checks = Array.isArray(result.checks) ? result.checks : [];
+  const visibleChecks = result.status === "passed" ? [] : checks.filter((check) => check.status !== "passed");
+  const checksMarkup = visibleChecks.length
+    ? `
+      <div class="doctor-checks">
+        ${visibleChecks
+          .map(
+            (check) => `
+              <div class="doctor-check ${escapeHtml(check.status || "blocked")}">
+                <span>${escapeHtml(check.label || check.id || "检查项")}</span>
+                <b>${escapeHtml(labels[check.status] || "未完成")}</b>
+                <p>${escapeHtml(check.message || "")}</p>
+              </div>
+            `,
+          )
+          .join("")}
+      </div>
+    `
+    : "";
+  panel.hidden = false;
+  panel.innerHTML = `
+    <div class="doctor-summary ${escapeHtml(result.status || "blocked")}">
+      <span>${escapeHtml(labels[result.status] || "未完成")}</span>
+      <p>${escapeHtml(result.next_action || "查看分项结果后重试。")}</p>
+    </div>
+    ${checksMarkup}
+  `;
 }
 
 function renderEarnings() {
@@ -444,6 +505,7 @@ async function loadSellerAccount() {
     sellerState.setup = null;
     sellerState.earnings = null;
     sellerState.activity = [];
+    sellerState.doctorResult = null;
   }
   renderAll();
 }
@@ -558,6 +620,7 @@ async function logout() {
   sellerState.setup = null;
   sellerState.earnings = null;
   sellerState.activity = [];
+  sellerState.doctorResult = null;
   renderAll();
   showToast("已退出");
 }
@@ -609,6 +672,97 @@ async function ensureSellerNode() {
   return payload.node;
 }
 
+function localProviderDoctorBlocked() {
+  return {
+    status: "blocked",
+    code: "provider_not_ready",
+    provider: onboardingProvider(),
+    node_id: sellerState.activeNode?.node_id || "",
+    duration_ms: 0,
+    next_action: "当前版本只开放 Codex 订阅自检，请切换到 Codex 节点。",
+    checks: [
+      {
+        id: "provider_doctor",
+        label: "Provider 自检",
+        status: "blocked",
+        code: "provider_not_ready",
+        message: "Claude Code 自检暂未开放。",
+      },
+    ],
+  };
+}
+
+async function runSellerDoctor() {
+  if (!sellerState.user) {
+    sellerState.doctorResult = doctorResult("blocked", "请先登录卖家账号后再运行自检。", [
+      {
+        id: "web_login",
+        label: "网页登录",
+        status: "blocked",
+        code: "login_required",
+        message: "当前未登录。",
+      },
+    ], "login_required");
+    renderDoctorResult();
+    return;
+  }
+
+  if (sellerState.activeProvider !== "codex") {
+    sellerState.doctorResult = localProviderDoctorBlocked();
+    renderDoctorResult();
+    return;
+  }
+
+  const node = sellerState.nodes.find((candidate) => candidate.provider === "codex-login");
+  if (!node) {
+    sellerState.doctorResult = doctorResult("blocked", "先点击“开始接入”创建 Codex 节点并完成安装。", [
+      {
+        id: "node_created",
+        label: "节点创建",
+        status: "blocked",
+        code: "node_not_created",
+        message: "还没有可自检的 Codex 节点。",
+      },
+    ], "node_not_created");
+    renderDoctorResult();
+    return;
+  }
+
+  const button = document.querySelector("#run-doctor");
+  sellerState.doctorRunning = true;
+  sellerState.doctorResult = null;
+  renderDoctorResult();
+  if (button) {
+    button.disabled = true;
+    button.textContent = "自检中";
+  }
+  try {
+    sellerState.doctorResult = await api(`/api/web/seller/nodes/${encodeURIComponent(node.node_id)}/doctor`, {
+      method: "POST",
+    });
+    renderDoctorResult();
+    await refreshSellerData();
+    renderClientState();
+  } catch (error) {
+    sellerState.doctorResult = doctorResult("failed", "自检接口请求失败。确认当前网页打开的是安装命令使用的同一个 Gateway，并重启 Gateway 到最新版本。", [
+      {
+        id: "doctor_api",
+        label: "自检接口",
+        status: "failed",
+        code: "doctor_api_failed",
+        message: error.message,
+      },
+    ], "doctor_api_failed");
+    renderDoctorResult();
+  } finally {
+    sellerState.doctorRunning = false;
+    if (button) {
+      button.disabled = false;
+      button.textContent = "运行自检";
+    }
+  }
+}
+
 async function startSellerOnboarding() {
   try {
     if (!sellerState.user) {
@@ -620,6 +774,7 @@ async function startSellerOnboarding() {
       method: "POST",
       body: {},
     });
+    sellerState.doctorResult = null;
     renderAll();
     showToast("安装命令已生成");
   } catch (error) {

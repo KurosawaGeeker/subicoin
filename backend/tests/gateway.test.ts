@@ -182,6 +182,90 @@ describe("Gateway", () => {
     seller.close();
   });
 
+  test("seller doctor blocks unauthenticated, unprovisioned, offline, and cross-account nodes", async () => {
+    const store = newStore();
+    const h = newGatewayTestHarness(true, store);
+
+    await postJSON(`${h.baseURL}/api/web/seller/nodes/seller-unprovisioned/doctor`, {}, 401);
+
+    const sellerAccount = await postJSON(`${h.baseURL}/api/web/auth/register`, { email: "doctor-seller@example.com", password: "password123" }, 201);
+    await postJSON(`${h.baseURL}/api/web/seller/nodes`, { node_id: "seller-unprovisioned", provider: "codex-login", max_concurrency: 1 }, 201, sellerAccount.cookie);
+    const unprovisioned = await postJSON(`${h.baseURL}/api/web/seller/nodes/seller-unprovisioned/doctor`, {}, 200, sellerAccount.cookie);
+    expect(unprovisioned.json.status).toBe("blocked");
+    expect(unprovisioned.json.code).toBe("setup_not_redeemed");
+
+    await postJSON(`${h.baseURL}/api/web/seller/nodes`, { node_id: "seller-offline", provider: "codex-login", max_concurrency: 1 }, 201, sellerAccount.cookie);
+    const setupResp = await postJSON(`${h.baseURL}/api/web/seller/nodes/seller-offline/setup-token`, {}, 201, sellerAccount.cookie);
+    await getJSON(`${h.baseURL}/api/v1/subi/seller/setup?token=${setupResp.json.setup_token}`, 200);
+    const offline = await postJSON(`${h.baseURL}/api/web/seller/nodes/seller-offline/doctor`, {}, 200, sellerAccount.cookie);
+    expect(offline.json.status).toBe("blocked");
+    expect(offline.json.code).toBe("agent_offline");
+
+    const otherAccount = await postJSON(`${h.baseURL}/api/web/auth/register`, { email: "doctor-other@example.com", password: "password123" }, 201);
+    await postJSON(`${h.baseURL}/api/web/seller/nodes/seller-offline/doctor`, {}, 404, otherAccount.cookie);
+  });
+
+  test("seller doctor runs Codex probe without billing or seller earnings", async () => {
+    const store = newStore();
+    const h = newGatewayTestHarness(true, store);
+    const account = await postJSON(`${h.baseURL}/api/web/auth/register`, { email: "doctor-codex@example.com", password: "password123" }, 201);
+    await postJSON(`${h.baseURL}/api/web/seller/nodes`, { node_id: "seller-doctor-codex", provider: "codex-login", max_concurrency: 1 }, 201, account.cookie);
+    const setupResp = await postJSON(`${h.baseURL}/api/web/seller/nodes/seller-doctor-codex/setup-token`, {}, 201, account.cookie);
+    const setup = await getJSON(`${h.baseURL}/api/v1/subi/seller/setup?token=${setupResp.json.setup_token}`, 200);
+    const seller = await h.startSeller("seller-doctor-codex", ["SUBI_SELLER_DOCTOR_OK"], setup.json.subi_seller_node_token, "codex-login");
+
+    const doctor = await postJSON(`${h.baseURL}/api/web/seller/nodes/seller-doctor-codex/doctor`, {}, 200, account.cookie);
+    expect(doctor.json.status).toBe("passed");
+    expect(doctor.json.provider).toBe("codex-login");
+    expect(doctor.json.checks.some((check: any) => check.id === "codex_probe" && check.status === "passed")).toBe(true);
+    const req = await seller.nextRequest();
+    expect(req.path).toBe("/v1/responses");
+    expect(req.meta?.diagnostic).toBe(true);
+    const reqBody = JSON.parse(new TextDecoder().decode(req.body));
+    expect(reqBody.instructions).toContain("SUBI_SELLER_DOCTOR_OK");
+    expect(reqBody.input[0].content).toContain("SUBI_SELLER_DOCTOR_OK");
+    expect(reqBody.stream).toBe(true);
+    expect(reqBody.store).toBe(false);
+
+    const activity = await getJSON(`${h.baseURL}/api/web/seller/activity`, 200, account.cookie);
+    expect(activity.json.activity).toHaveLength(0);
+    const earnings = await getJSON(`${h.baseURL}/api/web/seller/earnings`, 200, account.cookie);
+    expect(earnings.json.earnings.balance_micros).toBe(0);
+    seller.close();
+  });
+
+  test("seller doctor reports Codex probe failure when marker is missing", async () => {
+    const store = newStore();
+    const h = newGatewayTestHarness(true, store);
+    const account = await postJSON(`${h.baseURL}/api/web/auth/register`, { email: "doctor-failed@example.com", password: "password123" }, 201);
+    await postJSON(`${h.baseURL}/api/web/seller/nodes`, { node_id: "seller-doctor-failed", provider: "codex-login", max_concurrency: 1 }, 201, account.cookie);
+    const setupResp = await postJSON(`${h.baseURL}/api/web/seller/nodes/seller-doctor-failed/setup-token`, {}, 201, account.cookie);
+    const setup = await getJSON(`${h.baseURL}/api/v1/subi/seller/setup?token=${setupResp.json.setup_token}`, 200);
+    const seller = await h.startSeller("seller-doctor-failed", ["WRONG_MARKER"], setup.json.subi_seller_node_token, "codex-login");
+
+    const doctor = await postJSON(`${h.baseURL}/api/web/seller/nodes/seller-doctor-failed/doctor`, {}, 200, account.cookie);
+    expect(doctor.json.status).toBe("failed");
+    expect(doctor.json.code).toBe("codex_probe_failed");
+    await seller.nextRequest();
+    seller.close();
+  });
+
+  test("seller doctor leaves Claude Code space but does not send Anthropic probe", async () => {
+    const store = newStore();
+    const h = newGatewayTestHarness(true, store);
+    const account = await postJSON(`${h.baseURL}/api/web/auth/register`, { email: "doctor-claude@example.com", password: "password123" }, 201);
+    await postJSON(`${h.baseURL}/api/web/seller/nodes`, { node_id: "seller-doctor-claude", provider: "claude-code", max_concurrency: 1 }, 201, account.cookie);
+    const setupResp = await postJSON(`${h.baseURL}/api/web/seller/nodes/seller-doctor-claude/setup-token`, {}, 201, account.cookie);
+    const setup = await getJSON(`${h.baseURL}/api/v1/subi/seller/setup?token=${setupResp.json.setup_token}`, 200);
+    const seller = await h.startSeller("seller-doctor-claude", ["SHOULD_NOT_RUN"], setup.json.subi_seller_node_token, "claude-code");
+
+    const doctor = await postJSON(`${h.baseURL}/api/web/seller/nodes/seller-doctor-claude/doctor`, {}, 200, account.cookie);
+    expect(doctor.json.status).toBe("blocked");
+    expect(doctor.json.code).toBe("provider_not_ready");
+    expect(seller.pendingRequestCount()).toBe(0);
+    seller.close();
+  });
+
   test("DB-backed buyer without credits receives 402", async () => {
     const store = newStore();
     const h = newGatewayTestHarness(true, store);
@@ -274,9 +358,9 @@ function newGatewayTestHarness(sessionContextEnabled: boolean, store?: Store) {
   const baseURL = server.url.toString().replace(/\/$/, "");
   return {
     baseURL,
-    async startSeller(nodeID: string, responses: string[], token = "seller-secret", upstreamMode = "codex-login") {
+    async startSeller(nodeID: string, responses: string[], token = "seller-secret", upstreamMode = "codex-login", options: GatewayTestSellerOptions = {}) {
       const wsURL = baseURL.replace(/^http/, "ws") + `/api/v1/subi/seller/agent/ws?token=${encodeURIComponent(token)}`;
-      const seller = new GatewayTestSeller(wsURL, nodeID, responses, upstreamMode);
+      const seller = new GatewayTestSeller(wsURL, nodeID, responses, upstreamMode, options);
       await seller.connect();
       return seller;
     },
@@ -303,6 +387,12 @@ function newGatewayTestHarness(sessionContextEnabled: boolean, store?: Store) {
   };
 }
 
+interface GatewayTestSellerOptions {
+  statusCode?: number;
+  upstreamModeHeader?: string;
+  autoRespond?: boolean;
+}
+
 class GatewayTestSeller {
   private ws?: WebSocket;
   private requests: SubiEnvelope[] = [];
@@ -314,6 +404,7 @@ class GatewayTestSeller {
     private readonly nodeID: string,
     private readonly responses: string[],
     private readonly upstreamMode: string,
+    private readonly options: GatewayTestSellerOptions = {},
   ) {}
 
   async connect(): Promise<void> {
@@ -359,12 +450,13 @@ class GatewayTestSeller {
     const waiter = this.waiters.shift();
     if (waiter) waiter(env);
     else this.requests.push(env);
+    if (this.options.autoRespond === false) return;
     const socket = this.ws as unknown as JSONSocket;
     sendEnvelope(socket, {
       type: subiEnvelopeResponseStart,
       request_id: env.request_id,
-      status_code: 200,
-      headers: { "Content-Type": ["application/json"], "X-Subi-Upstream-Mode": ["fake"] },
+      status_code: this.options.statusCode ?? 200,
+      headers: { "Content-Type": ["application/json"], "X-Subi-Upstream-Mode": [this.options.upstreamModeHeader || this.upstreamMode] },
     });
     const text = this.responses[Math.min(this.next, this.responses.length - 1)] ?? "OK";
     this.next++;

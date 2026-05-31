@@ -585,6 +585,15 @@ export class Store {
       .all(userID) as any[]).map(sellerNodeFromRow);
   }
 
+  getSellerNode(userID: string, nodeID: string): SellerNode | undefined {
+    const row = this.db
+      .query(
+        "SELECT id, seller_user_id, node_id, status, provider, max_concurrency, last_seen_at, created_at, updated_at FROM seller_nodes WHERE seller_user_id = ? AND node_id = ?",
+      )
+      .get(userID, trim(nodeID)) as any;
+    return row ? sellerNodeFromRow(row) : undefined;
+  }
+
   createSellerSetupToken(userID: string, nodeID: string, ttlMS = 30 * 60 * 1000): SellerSetupToken {
     const row = this.db.query("SELECT id FROM seller_nodes WHERE seller_user_id = ? AND node_id = ?").get(userID, nodeID) as any;
     if (!row) throw errNotFound();

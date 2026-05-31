@@ -845,10 +845,12 @@ body.auth-lock {
   grid-template-columns: minmax(0, 1fr) 300px;
   gap: 20px;
   align-items: start;
+  min-width: 0;
 }
 
 .client-card,
 .client-side-card {
+  min-width: 0;
   padding: 24px;
 }
 
@@ -970,6 +972,117 @@ body.auth-lock {
 .full-width {
   width: 100%;
   margin-top: 20px;
+}
+
+.secondary-action[disabled] {
+  cursor: wait;
+  opacity: 0.62;
+}
+
+.doctor-capsule {
+  margin-top: 20px;
+  padding: 0;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.doctor-capsule .full-width {
+  margin-top: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  backdrop-filter: none;
+}
+
+.doctor-panel {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.doctor-summary,
+.doctor-check {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.doctor-summary {
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.56);
+}
+
+.doctor-summary span {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  padding: 0 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.doctor-summary p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.doctor-summary.passed span,
+.doctor-check.passed b {
+  color: var(--good);
+  background: rgba(107, 143, 94, 0.1);
+}
+
+.doctor-summary.failed span,
+.doctor-check.failed b {
+  color: #a44d42;
+  background: rgba(164, 77, 66, 0.1);
+}
+
+.doctor-summary.blocked span,
+.doctor-check.blocked b {
+  color: var(--brand-strong);
+  background: rgba(168, 125, 90, 0.1);
+}
+
+.doctor-checks {
+  display: grid;
+  gap: 8px;
+}
+
+.doctor-check {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 10px;
+  padding: 10px;
+  background: rgba(139, 115, 85, 0.04);
+}
+
+.doctor-check span {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.doctor-check b {
+  min-width: 46px;
+  min-height: 22px;
+  padding: 3px 7px;
+  border-radius: 8px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.doctor-check p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .network-section {
