@@ -19,6 +19,7 @@ const sellerState = {
 const creditMicros = 1_000_000;
 const refreshIntervalMS = 5000;
 const doctorPassedMessage = "自检通过，随时可以接单赚钱。";
+const noExpandedConsoleNode = "__subi_no_expanded_console_node__";
 const consoleProviderOptions = [
   { value: "codex", label: "Codex", backend: "codex-login" },
   { value: "claude", label: "Claude", backend: "claude-code" },
@@ -553,7 +554,7 @@ document.addEventListener("click", (event) => {
   const toggleConsoleNode = event.target.closest("[data-console-toggle]");
   if (toggleConsoleNode) {
     const nodeID = toggleConsoleNode.dataset.consoleToggle;
-    sellerState.expandedConsoleNodeID = sellerState.expandedConsoleNodeID === nodeID ? "" : nodeID;
+    sellerState.expandedConsoleNodeID = sellerState.expandedConsoleNodeID === nodeID ? noExpandedConsoleNode : nodeID;
     renderSellerConsole();
     return;
   }
@@ -1222,7 +1223,10 @@ function renderSellerConsole() {
     `;
     return;
   }
-  if (!sellerState.expandedConsoleNodeID || !sellerState.nodes.some((node) => node.node_id === sellerState.expandedConsoleNodeID)) {
+  if (
+    sellerState.expandedConsoleNodeID !== noExpandedConsoleNode &&
+    (!sellerState.expandedConsoleNodeID || !sellerState.nodes.some((node) => node.node_id === sellerState.expandedConsoleNodeID))
+  ) {
     sellerState.expandedConsoleNodeID = sellerState.nodes[0].node_id;
   }
   list.innerHTML = sellerState.nodes.map(renderConsoleNode).join("");
