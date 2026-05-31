@@ -1150,6 +1150,131 @@ body.auth-lock {
   transform: translateY(0);
 }
 
+@media (min-width: 1600px) {
+  .topbar-inner {
+    width: min(1280px, calc(100% - 80px));
+    min-height: 70px;
+  }
+
+  .brand {
+    gap: 12px;
+    font-size: 20px;
+  }
+
+  .brand-mark {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    font-size: 17px;
+  }
+
+  .role-switcher a,
+  .language-toggle button {
+    min-height: 32px;
+    padding: 0 14px;
+    font-size: 14px;
+  }
+
+  .nav {
+    gap: 30px;
+  }
+
+  .nav a {
+    font-size: 17px;
+  }
+
+  .top-balance,
+  .compact {
+    min-height: 38px;
+    padding: 0 14px;
+    font-size: 14px;
+  }
+
+  .page-shell {
+    width: min(1280px, calc(100% - 80px));
+    padding: 48px 0 96px;
+  }
+
+  .hero-console {
+    grid-template-columns: minmax(0, 1fr) 380px;
+    gap: 36px;
+    margin-bottom: 18px;
+  }
+
+  .hero-copy {
+    min-height: 320px;
+  }
+
+  .hero-copy h1 {
+    max-width: 900px;
+    font-size: 76px;
+    line-height: 1;
+  }
+
+  .hero-subcopy {
+    max-width: 720px;
+    margin-top: 22px;
+    font-size: 21px;
+    line-height: 1.55;
+  }
+
+  .value-strip {
+    gap: 10px;
+    margin-top: 24px;
+  }
+
+  .value-strip span {
+    min-height: 40px;
+    padding: 0 14px;
+    font-size: 15px;
+  }
+
+  .hero-actions {
+    gap: 12px;
+    margin-top: 28px;
+  }
+
+  .btn {
+    min-height: 48px;
+    padding: 0 20px;
+    font-size: 15px;
+  }
+
+  .balance-main {
+    padding: 26px;
+  }
+
+  .balance-main span,
+  .balance-row span {
+    font-size: 15px;
+  }
+
+  .balance-main strong {
+    font-size: 56px;
+  }
+
+  .balance-row {
+    padding: 18px 26px;
+  }
+
+  .balance-row strong {
+    font-size: 30px;
+  }
+
+  .panel {
+    margin-top: 18px;
+    padding: 26px;
+  }
+
+  .panel-heading h2 {
+    font-size: 28px;
+  }
+
+  #credits .panel-heading h2 {
+    font-size: 26px;
+  }
+}
+
 @media (max-width: 940px) {
   .topbar-inner {
     grid-template-columns: 1fr auto;

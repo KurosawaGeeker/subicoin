@@ -93,6 +93,59 @@
         backdrop-filter: blur(16px);
       }
 
+      @media (min-width: 1600px) {
+        .entry-shell {
+          padding: 48px;
+        }
+
+        .entry-content {
+          width: min(920px, 100%);
+        }
+
+        .entry-brand {
+          gap: 12px;
+          margin-bottom: 32px;
+          font-size: 17px;
+        }
+
+        .entry-brand .brand-mark {
+          width: 36px;
+          height: 36px;
+          border-radius: 10px;
+          font-size: 17px;
+        }
+
+        .entry-content h1 {
+          font-size: 92px;
+          line-height: 1.01;
+        }
+
+        .entry-content p {
+          max-width: 760px;
+          margin-top: 30px;
+          font-size: 26px;
+          line-height: 1.5;
+        }
+
+        .entry-actions {
+          gap: 18px;
+          margin-top: 44px;
+        }
+
+        .entry-actions a {
+          min-width: 204px;
+          min-height: 64px;
+          padding: 0 32px;
+          font-size: 20px;
+        }
+
+        .entry-note {
+          margin-top: 62px;
+          padding: 12px 22px;
+          font-size: 15px;
+        }
+      }
+
       @media (max-width: 720px) {
         body {
           overflow: auto;

@@ -1029,6 +1029,120 @@ body.auth-lock {
   line-height: 1.7;
 }
 
+@media (min-width: 1600px) {
+  .nav-inner {
+    width: min(1280px, calc(100% - 80px));
+    min-height: 70px;
+  }
+
+  .brand {
+    gap: 12px;
+    font-size: 20px;
+  }
+
+  .brand-mark {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    font-size: 17px;
+  }
+
+  .role-switcher a,
+  .language-toggle button {
+    min-height: 32px;
+    padding: 0 14px;
+    font-size: 14px;
+  }
+
+  .nav-links {
+    gap: 34px;
+  }
+
+  .nav-links a {
+    font-size: 17px;
+  }
+
+  .login-btn,
+  .refresh-btn {
+    min-height: 38px;
+    padding: 0 18px;
+    font-size: 14px;
+  }
+
+  .hero-content {
+    min-height: calc(100vh - 70px);
+    min-height: calc(100dvh - 70px);
+    padding: 72px 24px 70px;
+    transform: none;
+  }
+
+  .hero .kicker {
+    margin-bottom: 18px;
+    font-size: 17px;
+  }
+
+  .hero h1 {
+    margin-bottom: 28px;
+    font-size: 78px;
+    line-height: 1.03;
+  }
+
+  .hero-copy {
+    max-width: 780px;
+    margin-bottom: 42px;
+    font-size: 23px;
+    line-height: 1.6;
+  }
+
+  .primary-action,
+  .secondary-action {
+    min-height: 58px;
+    padding: 0 28px;
+    font-size: 17px;
+  }
+
+  .hero-actions {
+    gap: 18px;
+    margin-bottom: 44px;
+  }
+
+  .settlement-ticker {
+    bottom: clamp(104px, 11vh, 144px);
+    width: min(880px, calc(100vw - 80px));
+    height: 108px;
+  }
+
+  .settlement-track span {
+    min-height: 40px;
+    padding: 0 18px;
+    font-size: 16px;
+  }
+
+  .page-main {
+    width: min(1180px, calc(100% - 80px));
+    padding: 72px 0 108px;
+  }
+
+  .page-header {
+    max-width: 880px;
+    margin-bottom: 42px;
+  }
+
+  .back-link {
+    font-size: 15px;
+  }
+
+  .page-header h1 {
+    font-size: 56px;
+  }
+
+  .page-header p:not(.kicker) {
+    max-width: 760px;
+    font-size: 20px;
+    line-height: 1.65;
+  }
+}
+
 .download-row,
 .earnings-grid,
 .api-grid {
