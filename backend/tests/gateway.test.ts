@@ -208,6 +208,8 @@ describe("Gateway", () => {
     expect(rootResp.headers.get("Content-Type")).toContain("text/html");
     expect(rootBody).toContain("你是卖家");
     expect(rootBody).toContain("我是买家");
+    expect(rootBody).toContain('id="network-map"');
+    expect(rootBody).toContain("./seller-market/app.js");
 
     const buyerRedirect = await fetch(`${h.baseURL}/buyer`, { redirect: "manual" });
     expect(buyerRedirect.status).toBe(307);

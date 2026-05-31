@@ -1015,19 +1015,23 @@ function initNetworkMap() {
   });
 }
 
-ensureAuthModal();
-document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") {
-    closeAuthModal();
-  }
-});
+if (document.body.dataset.entryOnly === "true") {
+  initNetworkMap();
+} else {
+  ensureAuthModal();
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeAuthModal();
+    }
+  });
 
-renderAll();
-initNetworkMap();
-loadSellerAccount();
+  renderAll();
+  initNetworkMap();
+  loadSellerAccount();
 
-window.setInterval(() => {
-  if (document.visibilityState === "visible") {
-    refreshSellerDataAndRender();
-  }
-}, refreshIntervalMS);
+  window.setInterval(() => {
+    if (document.visibilityState === "visible") {
+      refreshSellerDataAndRender();
+    }
+  }, refreshIntervalMS);
+}
