@@ -11,6 +11,25 @@
         overflow: hidden;
       }
 
+      .entry-seller-nav {
+        position: fixed;
+        right: 0;
+        left: 0;
+        width: 100%;
+        opacity: 0;
+        pointer-events: none;
+        transform: translateY(-12px);
+        transition:
+          opacity 220ms ease,
+          transform 220ms ease;
+      }
+
+      body.entry-earn-mode .entry-seller-nav {
+        opacity: 1;
+        pointer-events: auto;
+        transform: translateY(0);
+      }
+
       .entry-shell {
         position: relative;
         display: grid;
@@ -20,20 +39,53 @@
         overflow: hidden;
       }
 
-      .entry-content {
+      .entry-stage {
         position: relative;
         z-index: 2;
-        width: min(760px, 100%);
+        display: grid;
+        width: min(920px, 100%);
+        place-items: center;
+        text-align: center;
+      }
+
+      .entry-panel {
+        grid-area: 1 / 1;
+        width: 100%;
+        opacity: 0;
+        transform: translateY(18px) scale(0.985);
+        transition:
+          opacity 260ms ease,
+          transform 260ms ease,
+          visibility 260ms ease;
+        visibility: hidden;
+      }
+
+      .entry-panel.is-active,
+      body.entry-earn-mode .entry-seller-panel {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        visibility: visible;
+      }
+
+      body.entry-earn-mode .entry-content {
+        opacity: 0;
+        transform: translateY(-18px) scale(0.985);
+        visibility: hidden;
+      }
+
+      .entry-content {
+        position: relative;
+        width: min(820px, 100%);
         text-align: center;
       }
 
       .entry-brand {
         display: inline-flex;
         align-items: center;
-        gap: 10px;
-        margin-bottom: 28px;
+        gap: 11px;
+        margin-bottom: 30px;
         color: var(--muted);
-        font-size: 14px;
+        font-size: 16px;
         font-weight: 700;
       }
 
@@ -93,26 +145,70 @@
         backdrop-filter: blur(16px);
       }
 
+      .entry-seller-panel .kicker {
+        margin-bottom: 18px;
+        color: rgba(138, 98, 68, 0.88);
+        font-size: 16px;
+      }
+
+      .entry-seller-panel h1 {
+        margin: 0 0 28px;
+        color: var(--text);
+        font-size: clamp(42px, 7vw, 82px);
+        font-weight: 300;
+        line-height: 1.03;
+        letter-spacing: 0;
+      }
+
+      .entry-seller-panel .hero-copy {
+        max-width: 760px;
+        margin-bottom: 42px;
+        font-size: clamp(18px, 2.3vw, 24px);
+      }
+
+      .entry-seller-panel .hero-actions {
+        margin-bottom: 0;
+      }
+
+      .entry-seller-ticker {
+        opacity: 0;
+        transition: opacity 260ms ease 120ms;
+      }
+
+      body.entry-earn-mode .entry-seller-ticker {
+        opacity: 1;
+      }
+
+      @media (min-width: 721px) {
+        body.entry-earn-mode .entry-seller-panel {
+          transform: translateY(-42px) scale(1);
+        }
+      }
+
       @media (min-width: 1600px) {
         .entry-shell {
           padding: 48px;
         }
 
+        .entry-stage {
+          width: min(980px, 100%);
+        }
+
         .entry-content {
-          width: min(920px, 100%);
+          width: min(980px, 100%);
         }
 
         .entry-brand {
           gap: 12px;
           margin-bottom: 32px;
-          font-size: 17px;
+          font-size: 21px;
         }
 
         .entry-brand .brand-mark {
-          width: 36px;
-          height: 36px;
-          border-radius: 10px;
-          font-size: 17px;
+          width: 40px;
+          height: 40px;
+          border-radius: 11px;
+          font-size: 19px;
         }
 
         .entry-content h1 {
@@ -144,6 +240,20 @@
           padding: 12px 22px;
           font-size: 15px;
         }
+
+        .entry-seller-panel .kicker {
+          font-size: 21px;
+        }
+
+        .entry-seller-panel h1 {
+          font-size: 92px;
+          line-height: 1.01;
+        }
+
+        .entry-seller-panel .hero-copy {
+          max-width: 820px;
+          font-size: 26px;
+        }
       }
 
       @media (max-width: 720px) {
@@ -156,42 +266,129 @@
           padding: 24px;
         }
 
+        .entry-stage {
+          place-items: start;
+          text-align: left;
+        }
+
+        .entry-panel {
+          transform: translateY(12px);
+        }
+
         .entry-content {
           text-align: left;
+        }
+
+        .entry-brand,
+        .entry-seller-panel .kicker {
+          font-size: 15px;
         }
 
         .entry-content p {
           margin-left: 0;
         }
 
+        .entry-seller-panel h1 {
+          font-size: 42px;
+          line-height: 1.04;
+        }
+
+        .entry-seller-panel .hero-copy {
+          margin-left: 0;
+          font-size: 18px;
+        }
+
         .entry-actions {
           justify-content: stretch;
         }
 
-        .entry-actions a {
+        .entry-actions a,
+        .entry-seller-panel .primary-action,
+        .entry-seller-panel .secondary-action {
           width: 100%;
+          min-height: 54px;
+          font-size: 17px;
+        }
+
+        .entry-seller-nav {
+          display: none;
         }
       }
     </style>
   </head>
   <body data-entry-only="true">
+    <nav class="top-nav entry-seller-nav" aria-label="主导航">
+      <div class="nav-inner">
+        <div class="brand-cluster">
+          <a class="brand" href="/seller/" aria-label="Subi 首页">
+            <span class="brand-mark" aria-hidden="true">S</span>
+            <span>Subi</span>
+          </a>
+          <div class="role-switcher" aria-label="切换视角">
+            <a href="/buyer/">用模型</a>
+            <a class="active" href="/seller/">赚收益</a>
+          </div>
+        </div>
+
+        <div class="nav-links">
+          <a class="active" href="/seller/">首页</a>
+          <a href="/seller/client.html">接入</a>
+          <a href="/seller/earnings.html">收益</a>
+          <a href="/seller/api.html">API</a>
+        </div>
+
+        <div class="nav-actions">
+          <div class="language-toggle" aria-label="语言">
+            <button class="active" type="button">中文</button>
+            <button type="button">EN</button>
+          </div>
+          <button class="refresh-btn" id="refresh-seller" type="button">刷新</button>
+          <button class="login-btn" id="auth-action" type="button">登录</button>
+        </div>
+      </div>
+    </nav>
     <main class="entry-shell">
       <canvas class="network-map" id="network-map" aria-hidden="true"></canvas>
       <div class="hero-overlay" aria-hidden="true"></div>
-      <section class="entry-content" aria-labelledby="entry-title">
-        <div class="entry-brand">
-          <span class="brand-mark" aria-hidden="true">S</span>
-          <span>分布式 TOKEN 共享平台</span>
+      <div class="entry-stage">
+        <section class="entry-content entry-panel is-active" aria-labelledby="entry-title">
+          <div class="entry-brand">
+            <span class="brand-mark" aria-hidden="true">S</span>
+            <span>分布式 TOKEN 共享平台</span>
+          </div>
+          <h1 id="entry-title">你想用 Subi<br />做什么？</h1>
+          <p>用闲置订阅赚收益，或用同一个 Subi Key 接入顶级编程模型。</p>
+          <div class="entry-actions">
+            <a class="primary-action" href="/seller/" data-entry-target="seller">让闲置订阅赚钱</a>
+            <a class="secondary-action" href="/buyer/">使用顶级编程模型</a>
+          </div>
+          <div class="entry-note">选择后进入对应控制台</div>
+        </section>
+
+        <section class="entry-seller-panel entry-panel" aria-labelledby="entry-seller-title" aria-hidden="true">
+          <p class="kicker">分布式 TOKEN 共享平台</p>
+          <h1 id="entry-seller-title">开着电脑就能赚钱<br />充分利用闲置订阅</h1>
+          <p class="hero-copy">订阅状态留在你的机器，Subi 为你匹配模型请求，然后躺着赚钱。</p>
+          <div class="hero-actions">
+            <a class="primary-action" href="/seller/client.html">开始接入</a>
+            <a class="secondary-action" href="/seller/#how-it-works">了解流程</a>
+          </div>
+        </section>
+      </div>
+      <div class="settlement-ticker entry-seller-ticker" aria-label="实时结算动态">
+        <div class="settlement-track">
+          <span><b>美国</b> 的用户 <code>sefzfdwankwdhg</code> 3 分钟前结算了 <strong>$38.40</strong></span>
+          <span><b>新加坡</b> 的用户 <code>qmxzvbnalkt</code> 5 分钟前结算了 <strong>$21.70</strong></span>
+          <span><b>日本</b> 的用户 <code>nkzfdwqplmxa</code> 8 分钟前结算了 <strong>$46.20</strong></span>
+          <span><b>韩国</b> 的用户 <code>vcrtwqaznplk</code> 11 分钟前结算了 <strong>$19.30</strong></span>
+          <span><b>德国</b> 的用户 <code>plmwdhgkqazx</code> 14 分钟前结算了 <strong>$54.10</strong></span>
+          <span><b>英国</b> 的用户 <code>zfdwankqmxvp</code> 18 分钟前结算了 <strong>$26.80</strong></span>
+          <span><b>加拿大</b> 的用户 <code>rktzplmqwvna</code> 21 分钟前结算了 <strong>$73.60</strong></span>
+          <span><b>澳大利亚</b> 的用户 <code>wdhgkqazxmpl</code> 24 分钟前结算了 <strong>$91.40</strong></span>
         </div>
-        <h1 id="entry-title">你想用 Subi<br />做什么？</h1>
-        <p>用闲置订阅赚收益，或用同一个 Subi Key 接入顶级编程模型。</p>
-        <div class="entry-actions">
-          <a class="primary-action" href="/seller/">让闲置订阅赚钱</a>
-          <a class="secondary-action" href="/buyer/">使用顶级编程模型</a>
-        </div>
-        <div class="entry-note">选择后进入对应控制台</div>
-      </section>
+      </div>
     </main>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <script src="./seller-market/app.js"></script>
   </body>
 </html>

@@ -174,6 +174,9 @@ function setText(selector, value) {
 
 function showToast(message) {
   const toast = document.querySelector("#toast");
+  if (!toast) {
+    return;
+  }
   toast.textContent = message;
   toast.classList.add("show");
   window.clearTimeout(showToast.timer);
@@ -1015,8 +1018,43 @@ function initNetworkMap() {
   });
 }
 
+function initEntrySwitcher() {
+  const entryContent = document.querySelector(".entry-content");
+  const sellerPanel = document.querySelector(".entry-seller-panel");
+  const sellerTrigger = document.querySelector("[data-entry-target='seller']");
+  if (!entryContent || !sellerPanel || !sellerTrigger) {
+    return;
+  }
+
+  function setSellerMode(active, { push = false } = {}) {
+    document.body.classList.toggle("entry-earn-mode", active);
+    entryContent.classList.toggle("is-active", !active);
+    entryContent.setAttribute("aria-hidden", String(active));
+    sellerPanel.setAttribute("aria-hidden", String(!active));
+    if (push) {
+      window.history.pushState({ entryMode: active ? "seller" : "entry" }, "", active ? "/seller/" : "/");
+    }
+  }
+
+  function transitionToSeller(event) {
+    event.preventDefault();
+    const update = () => setSellerMode(true, { push: window.location.pathname !== "/seller/" });
+    if (document.startViewTransition) {
+      document.startViewTransition(update);
+    } else {
+      update();
+    }
+  }
+
+  sellerTrigger.addEventListener("click", transitionToSeller);
+  window.addEventListener("popstate", () => {
+    setSellerMode(window.location.pathname.startsWith("/seller"));
+  });
+}
+
 if (document.body.dataset.entryOnly === "true") {
   initNetworkMap();
+  initEntrySwitcher();
 } else {
   ensureAuthModal();
   document.addEventListener("keydown", (event) => {

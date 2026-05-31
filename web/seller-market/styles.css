@@ -451,7 +451,7 @@ body.auth-lock {
 
 .hero .kicker {
   color: rgba(138, 98, 68, 0.84);
-  font-size: 14px;
+  font-size: 16px;
 }
 
 .hero h1 {
@@ -1041,17 +1041,17 @@ body.auth-lock {
   }
 
   .brand-mark {
-    width: 36px;
-    height: 36px;
-    border-radius: 10px;
-    font-size: 17px;
+    width: 40px;
+    height: 40px;
+    border-radius: 11px;
+    font-size: 19px;
   }
 
   .role-switcher a,
   .language-toggle button {
-    min-height: 32px;
-    padding: 0 14px;
-    font-size: 14px;
+    min-height: 34px;
+    padding: 0 15px;
+    font-size: 15px;
   }
 
   .nav-links {
@@ -1073,32 +1073,32 @@ body.auth-lock {
     min-height: calc(100vh - 70px);
     min-height: calc(100dvh - 70px);
     padding: 72px 24px 70px;
-    transform: none;
+    transform: translateY(-42px);
   }
 
   .hero .kicker {
     margin-bottom: 18px;
-    font-size: 17px;
+    font-size: 21px;
   }
 
   .hero h1 {
     margin-bottom: 28px;
-    font-size: 78px;
-    line-height: 1.03;
+    font-size: 92px;
+    line-height: 1.01;
   }
 
   .hero-copy {
-    max-width: 780px;
+    max-width: 820px;
     margin-bottom: 42px;
-    font-size: 23px;
+    font-size: 26px;
     line-height: 1.6;
   }
 
   .primary-action,
   .secondary-action {
-    min-height: 58px;
-    padding: 0 28px;
-    font-size: 17px;
+    min-height: 64px;
+    padding: 0 32px;
+    font-size: 20px;
   }
 
   .hero-actions {
@@ -1454,11 +1454,12 @@ td code {
   }
 
   .hero h1 {
-    font-size: 34px;
+    font-size: 42px;
+    line-height: 1.04;
   }
 
   .hero-copy {
-    font-size: 15px;
+    font-size: 18px;
   }
 
   .steps,
