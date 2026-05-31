@@ -149,11 +149,14 @@ describe("Gateway", () => {
     const cookie = register.cookie;
     const nodeResp = await postJSON(`${h.baseURL}/api/web/seller/nodes`, { node_id: "seller-macbook-001", max_concurrency: 1 }, 201, cookie);
     expect(nodeResp.json.node.node_id).toBe("seller-macbook-001");
+    const updatedNode = await patchJSON(`${h.baseURL}/api/web/seller/nodes/seller-macbook-001`, { provider: "codex-login", max_concurrency: 2 }, 200, cookie);
+    expect(updatedNode.json.node.max_concurrency).toBe(2);
     const setupResp = await postJSON(`${h.baseURL}/api/web/seller/nodes/seller-macbook-001/setup-token`, {}, 201, cookie);
     expect(setupResp.json.install_command_unix).toContain("/api/v1/subi/seller/install.sh");
     expect(setupResp.json.install_command_windows).toContain("/api/v1/subi/seller/install.ps1");
     const setup = await getJSON(`${h.baseURL}/api/v1/subi/seller/setup?token=${setupResp.json.setup_token}`, 200);
     expect(setup.json.subi_node_id).toBe("seller-macbook-001");
+    expect(setup.json.seller_config_env).toContain("SELLER_WORKERS=2");
 
     const seller = await h.startSeller("seller-macbook-001", ["DB_KEY_OK"], setup.json.subi_seller_node_token);
     const keyResp = await postJSON(`${h.baseURL}/api/web/buyer/api-keys`, { name: "Codex" }, 201, cookie);
@@ -487,6 +490,17 @@ function newStore(): Store {
 async function postJSON(url: string, payload: unknown, expectedStatus: number, cookie = "") {
   const resp = await fetch(url, {
     method: "POST",
+    headers: { "Content-Type": "application/json", ...(cookie ? { Cookie: cookie } : {}) },
+    body: JSON.stringify(payload),
+  });
+  const text = await resp.text();
+  expect(resp.status, text).toBe(expectedStatus);
+  return { json: JSON.parse(text), cookie: resp.headers.get("set-cookie") || cookie };
+}
+
+async function patchJSON(url: string, payload: unknown, expectedStatus: number, cookie = "") {
+  const resp = await fetch(url, {
+    method: "PATCH",
     headers: { "Content-Type": "application/json", ...(cookie ? { Cookie: cookie } : {}) },
     body: JSON.stringify(payload),
   });

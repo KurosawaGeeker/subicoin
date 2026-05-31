@@ -1,3 +1,5 @@
+const consoleConfigStorageKey = "subi_seller_console_configs";
+
 const sellerState = {
   user: null,
   nodes: [],
@@ -9,11 +11,29 @@ const sellerState = {
   doctorResult: null,
   doctorRunning: false,
   refreshing: false,
+  consoleConfigs: loadConsoleConfigs(),
+  expandedConsoleNodeID: "",
+  setupByNode: {},
 };
 
 const creditMicros = 1_000_000;
 const refreshIntervalMS = 5000;
 const doctorPassedMessage = "自检通过，随时可以接单赚钱。";
+const consoleProviderOptions = [
+  { value: "codex", label: "Codex", backend: "codex-login" },
+  { value: "claude", label: "Claude", backend: "claude-code" },
+  { value: "chatgpt", label: "ChatGPT", backend: "codex-login" },
+  { value: "cursor", label: "Cursor", backend: "codex-login" },
+  { value: "other", label: "Other", backend: "codex-login" },
+];
+const consoleMachineTypes = ["Mac", "Windows", "Linux", "Server", "Other"];
+const consoleScheduleModes = ["永久开放", "每天固定时间", "仅本次开放", "手动暂停"];
+const consoleTemporaryDurations = ["1 小时", "2 小时", "4 小时", "8 小时", "自定义"];
+const consoleTimezones = ["跟随设备", "跟随账户", "Asia/Shanghai", "America/Los_Angeles", "UTC"];
+const consoleBalanceModes = ["保底余额", "固定可售额度", "可售比例"];
+const consoleFailureActions = ["自动暂停接新单", "自动停止全部接入", "仅提醒"];
+const consoleNotificationChannels = ["站内通知", "邮件", "Telegram", "Webhook"];
+const consoleWeekDays = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
 
 function doctorResult(status, nextAction, checks, code = "") {
   return {
@@ -43,6 +63,88 @@ function compactID(value) {
     return value;
   }
   return `${value.slice(0, 10)}...${value.slice(-6)}`;
+}
+
+function loadConsoleConfigs() {
+  try {
+    const raw = window.localStorage.getItem(consoleConfigStorageKey);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveConsoleConfigs() {
+  window.localStorage.setItem(consoleConfigStorageKey, JSON.stringify(sellerState.consoleConfigs));
+}
+
+function providerValueFromBackend(provider) {
+  const match = consoleProviderOptions.find((option) => option.backend === provider);
+  return match?.value || "codex";
+}
+
+function backendProviderFromValue(value) {
+  const match = consoleProviderOptions.find((option) => option.value === value);
+  return match?.backend || "codex-login";
+}
+
+function providerLabel(value) {
+  const providerValue = value?.includes("-") ? providerValueFromBackend(value) : value;
+  return consoleProviderOptions.find((option) => option.value === providerValue)?.label || "Codex";
+}
+
+function nodeIDSeed() {
+  return Math.random().toString(16).slice(2, 8);
+}
+
+function defaultConsoleNodeID() {
+  return `seller-node-${nodeIDSeed()}`;
+}
+
+function defaultConsoleConfig(node = {}) {
+  const provider = providerValueFromBackend(node.provider || "codex-login");
+  return {
+    display_name: node.node_id ? compactID(node.node_id) : "新 Seller 节点",
+    machine_name: node.status === "created" ? "待接入" : "当前设备",
+    machine_type: "Mac",
+    machine_note: "",
+    subscription_provider: provider,
+    subscription_label: `${providerLabel(provider)} 订阅`,
+    accept_mode: "pause_new",
+    max_buyers: Number(node.max_concurrency || 1),
+    schedule_mode: "仅本次开放",
+    daily_windows: "09:00-18:00",
+    repeat_days: [...consoleWeekDays],
+    temporary_duration: "1 小时",
+    timezone: "跟随设备",
+    balance_guard_mode: "保底余额",
+    reserve_balance: "20",
+    sellable_quota: "",
+    sellable_ratio: "20",
+    daily_spend_cap_enabled: false,
+    daily_spend_cap: "",
+    failure_action: "自动暂停接新单",
+    notification_channels: ["站内通知"],
+  };
+}
+
+function consoleConfigForNode(node) {
+  if (!node?.node_id) {
+    return defaultConsoleConfig(node);
+  }
+  return {
+    ...defaultConsoleConfig(node),
+    ...(sellerState.consoleConfigs[node.node_id] || {}),
+  };
+}
+
+function updateConsoleConfig(nodeID, patch) {
+  if (!nodeID) {
+    return;
+  }
+  const existing = sellerState.consoleConfigs[nodeID] || {};
+  sellerState.consoleConfigs[nodeID] = { ...existing, ...patch };
+  saveConsoleConfigs();
 }
 
 function defaultNodeID() {
@@ -123,6 +225,84 @@ function installCommands() {
   ];
 }
 
+function codexBareMetalGuide() {
+  return {
+    title: "机器上没有 Codex？",
+    note:
+      "如果接单机器还没有 Codex CLI 或没有登录，请先在这台机器、同一个系统用户下完成下面步骤，再执行上面的一键接入命令。",
+    steps: [
+      {
+        title: "安装 Codex CLI",
+        body: "macOS / Linux 用官方安装脚本；Windows 在 PowerShell 里安装。",
+        code: `# macOS / Linux
+curl -fsSL https://chatgpt.com/codex/install.sh | sh
+
+# Windows PowerShell
+powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 | iex"`,
+      },
+      {
+        title: "登录已有订阅账号",
+        body:
+          "用已经订阅过 Codex 的 ChatGPT 账号登录。服务器或无浏览器环境使用 device auth，在浏览器里输入终端给出的验证码完成登录。",
+        code: `codex login
+
+# 无桌面浏览器 / SSH 服务器
+codex login --device-auth`,
+      },
+      {
+        title: "确认登录态可用",
+        body:
+          "看到已登录后再点击“开始接入”。不要 logout，不要删除 ~/.codex；seller-agent 必须和 Codex 登录态运行在同一个系统用户下。",
+        code: `codex login status`,
+      },
+    ],
+  };
+}
+
+function claudeBareMetalGuide() {
+  return {
+    title: "机器上没有 Claude Code？",
+    note:
+      "如果接单机器还没有 Claude Code 或没有登录，请先在这台机器、同一个系统用户下完成下面步骤，再执行上面的一键接入命令。",
+    steps: [
+      {
+        title: "安装 Claude Code",
+        body: "任选官方原生安装脚本；如果机器已有 Node.js 18+，也可以使用 npm 全局安装。",
+        code: `# macOS / Linux / WSL
+curl -fsSL https://claude.ai/install.sh | bash
+
+# Windows PowerShell
+irm https://claude.ai/install.ps1 | iex
+
+# 已安装 Node.js 18+ 的机器也可以使用 npm
+npm install -g @anthropic-ai/claude-code`,
+      },
+      {
+        title: "登录已有 Claude 订阅账号",
+        body:
+          "运行 claude 后按终端提示完成 Claude 账号登录。之后需要切换或重新登录时，在 Claude Code 交互界面执行 /login。",
+        code: `claude
+
+# 在 Claude Code 交互界面里切换或重新登录
+/login`,
+      },
+      {
+        title: "让 seller-agent 能读取凭据",
+        body:
+          "先确认 claude 能正常启动。如果 seller-agent 读不到登录态，运行 setup-token，并把生成的 token 放进启动环境。",
+        code: `claude --version
+claude setup-token
+
+# macOS / Linux / Unix
+export SELLER_CLAUDE_CODE_OAUTH_TOKEN="<claude setup-token output>"
+
+# Windows PowerShell
+$env:SELLER_CLAUDE_CODE_OAUTH_TOKEN="<claude setup-token output>"`,
+      },
+    ],
+  };
+}
+
 function providerContent() {
   const commands = installCommands();
   return {
@@ -130,15 +310,17 @@ function providerContent() {
       title: "Codex 订阅",
       tag: "推荐",
       note:
-        "只复用这台机器上的 Codex 登录态发网络请求，不在你的机器执行使用者的工具命令。",
+        "必须在运行 seller-agent 的这台机器上保持 Codex 登录态。Subi 只复用这份登录态发网络请求，不在你的机器执行使用者的工具命令。",
       commands,
+      guide: codexBareMetalGuide(),
     },
     claude: {
       title: "Claude Code 订阅",
       tag: "Anthropic Messages",
       note:
-        "复用这台机器上的 Claude Code 凭据、claude setup-token、ANTHROPIC_AUTH_TOKEN 或 ANTHROPIC_API_KEY，只转发 Anthropic Messages 请求。",
+        "必须在运行 seller-agent 的这台机器上保持 Claude Code 凭据可用。Subi 只复用这份凭据转发 Anthropic Messages 请求，不在你的机器执行使用者的工具命令。",
       commands,
+      guide: claudeBareMetalGuide(),
     },
   };
 }
@@ -179,6 +361,33 @@ function renderProvider(providerKey) {
           `,
         )
         .join("")}
+    </div>
+    ${provider.guide ? renderSetupGuide(provider.guide) : ""}
+  `;
+}
+
+function renderSetupGuide(guide) {
+  return `
+    <div class="setup-guide">
+      <div class="setup-guide-heading">
+        <span>${escapeHtml(guide.title)}</span>
+        <p>${escapeHtml(guide.note)}</p>
+      </div>
+      <ol class="setup-guide-steps">
+        ${guide.steps
+          .map(
+            (step) => `
+              <li>
+                <div>
+                  <b>${escapeHtml(step.title)}</b>
+                  <p>${escapeHtml(step.body)}</p>
+                  <pre><code>${escapeHtml(step.code)}</code></pre>
+                </div>
+              </li>
+            `,
+          )
+          .join("")}
+      </ol>
     </div>
   `;
 }
@@ -335,6 +544,67 @@ document.addEventListener("click", (event) => {
     return;
   }
 
+  const addConsoleNode = event.target.closest("#add-seller-node, [data-console-add]");
+  if (addConsoleNode) {
+    createSellerConsoleNode();
+    return;
+  }
+
+  const toggleConsoleNode = event.target.closest("[data-console-toggle]");
+  if (toggleConsoleNode) {
+    const nodeID = toggleConsoleNode.dataset.consoleToggle;
+    sellerState.expandedConsoleNodeID = sellerState.expandedConsoleNodeID === nodeID ? "" : nodeID;
+    renderSellerConsole();
+    return;
+  }
+
+  const accessConsoleNode = event.target.closest("[data-console-access]");
+  if (accessConsoleNode) {
+    copyConsoleNodeAccess(accessConsoleNode.dataset.consoleAccess);
+    return;
+  }
+
+  const consoleMode = event.target.closest("[data-console-mode]");
+  if (consoleMode) {
+    updateConsoleConfig(consoleMode.dataset.nodeId, { accept_mode: consoleMode.dataset.consoleMode });
+    renderSellerConsole();
+    return;
+  }
+
+  const consoleDay = event.target.closest("[data-console-day]");
+  if (consoleDay) {
+    const nodeID = consoleDay.dataset.nodeId;
+    const node = consoleNodeByID(nodeID);
+    const config = consoleConfigForNode(node);
+    const day = consoleDay.dataset.consoleDay;
+    const days = new Set(config.repeat_days || []);
+    if (days.has(day)) {
+      days.delete(day);
+    } else {
+      days.add(day);
+    }
+    updateConsoleConfig(nodeID, { repeat_days: [...days] });
+    renderSellerConsole();
+    return;
+  }
+
+  const consoleNotification = event.target.closest("[data-console-notification]");
+  if (consoleNotification) {
+    const nodeID = consoleNotification.dataset.nodeId;
+    const node = consoleNodeByID(nodeID);
+    const config = consoleConfigForNode(node);
+    const channel = consoleNotification.dataset.consoleNotification;
+    const channels = new Set(config.notification_channels || []);
+    if (channels.has(channel)) {
+      channels.delete(channel);
+    } else {
+      channels.add(channel);
+    }
+    updateConsoleConfig(nodeID, { notification_channels: [...channels] });
+    renderSellerConsole();
+    return;
+  }
+
   const codeCopy = event.target.closest(".code-copy");
   if (codeCopy) {
     const code = codeCopy.closest(".code-block")?.querySelector("code");
@@ -372,6 +642,21 @@ document.addEventListener("click", (event) => {
   }
 });
 
+document.addEventListener("input", (event) => {
+  const field = event.target.closest("[data-console-field]");
+  if (field) {
+    updateConsoleField(field);
+  }
+});
+
+document.addEventListener("change", (event) => {
+  const field = event.target.closest("[data-console-field]");
+  if (field) {
+    updateConsoleField(field);
+    renderSellerConsole();
+  }
+});
+
 document.querySelector("#run-doctor")?.addEventListener("click", () => {
   runSellerDoctor();
 });
@@ -393,7 +678,7 @@ function renderClientState() {
   setText("#seller-node-title", node?.node_id || (sellerState.user ? "尚未创建节点" : "未登录"));
   setText("#seller-node-status", node?.status || "--");
   setText("#seller-node-mode", node?.provider || "--");
-  setText("#seller-node-workers", node ? `${node.max_concurrency || 1} worker` : "--");
+  setText("#seller-node-workers", node ? `${node.max_concurrency || 1} buyer` : "--");
   renderProvider();
   renderDoctorResult();
 }
@@ -502,6 +787,541 @@ function renderEarnings() {
     .join("");
 }
 
+function sameLocalDate(value, date) {
+  if (!value) {
+    return false;
+  }
+  const parsed = new Date(value);
+  return !Number.isNaN(parsed.getTime()) && parsed.toDateString() === date.toDateString();
+}
+
+function nodeActivity(node) {
+  return sellerState.activity.filter((item) => item.seller_node_id === node.node_id);
+}
+
+function nodeTodayEarnings(node) {
+  const today = new Date();
+  return nodeActivity(node)
+    .filter((item) => sameLocalDate(item.created_at, today))
+    .reduce((sum, item) => sum + Number(item.seller_earning_micros || 0), 0);
+}
+
+function nodeTotalEarnings(node) {
+  return nodeActivity(node).reduce((sum, item) => sum + Number(item.seller_earning_micros || 0), 0);
+}
+
+function nodeCurrentBuyers(node) {
+  return Number(node.active_requests || node.current_buyers || 0);
+}
+
+function nodeMaxBuyers(node, config) {
+  return Math.max(1, Math.min(10, Number(config.max_buyers || node.max_concurrency || 1)));
+}
+
+function consoleStatus(node, config) {
+  const current = nodeCurrentBuyers(node);
+  const max = nodeMaxBuyers(node, config);
+  if (config.accept_mode === "stop_all") {
+    return { label: "已停止", tone: "failed", reason: "停止全部接入" };
+  }
+  if (config.accept_mode === "pause_new") {
+    return { label: "暂停中", tone: "idle", reason: "手动暂停接新单" };
+  }
+  if (node.status === "created" || node.status === "provisioned") {
+    return { label: "待接入", tone: "pending", reason: "复制接入指令并在目标设备运行" };
+  }
+  if (node.status === "offline") {
+    return { label: "离线", tone: "failed", reason: "机器离线或最近心跳中断" };
+  }
+  if (node.status !== "online") {
+    return { label: node.status || "异常", tone: "failed", reason: "节点状态异常" };
+  }
+  if (config.schedule_mode === "手动暂停") {
+    return { label: "暂停中", tone: "idle", reason: "运行时间设置为手动暂停" };
+  }
+  if (current >= max) {
+    return { label: "名额已满", tone: "pending", reason: "当前接入数达到上限" };
+  }
+  return { label: "接单中", tone: "ok", reason: "可以接新 buyer" };
+}
+
+function consoleSetupStatus(node) {
+  const setup = sellerState.setupByNode[node.node_id];
+  if (!setup) {
+    return node.status === "created" ? "待生成" : "已接入";
+  }
+  if (setup.expires_at && new Date(setup.expires_at).getTime() < Date.now()) {
+    return "指令已过期";
+  }
+  return setup.copied_at ? "已复制" : "已生成";
+}
+
+function renderOptions(options, selected) {
+  return options
+    .map((option) => {
+      const value = typeof option === "string" ? option : option.value;
+      const label = typeof option === "string" ? option : option.label;
+      return `<option value="${escapeHtml(String(value))}" ${value === selected ? "selected" : ""}>${escapeHtml(String(label))}</option>`;
+    })
+    .join("");
+}
+
+function renderConsoleSummary() {
+  if (!document.querySelector("#console-online-nodes")) {
+    return;
+  }
+  const nodes = sellerState.nodes;
+  const configs = new Map(nodes.map((node) => [node.node_id, consoleConfigForNode(node)]));
+  const onlineNodes = nodes.filter((node) => node.status === "online").length;
+  const currentBuyers = nodes.reduce((sum, node) => sum + nodeCurrentBuyers(node), 0);
+  const maxBuyers = nodes.reduce((sum, node) => sum + nodeMaxBuyers(node, configs.get(node.node_id)), 0);
+  const todayEarnings = nodes.reduce((sum, node) => sum + nodeTodayEarnings(node), 0);
+  const statuses = nodes.map((node) => consoleStatus(node, configs.get(node.node_id)));
+  const accepting = statuses.find((status) => status.label === "接单中");
+  const firstBlocked = statuses.find((status) => status.label !== "接单中");
+  const statusLabel = !sellerState.user
+    ? "未登录"
+    : nodes.length === 0
+      ? "暂无节点"
+      : accepting
+        ? "接单中"
+        : firstBlocked?.label || "无可用节点";
+  const reason = !sellerState.user
+    ? "登录后加载节点"
+    : nodes.length === 0
+      ? "添加 Seller 节点后开始配置"
+      : accepting
+        ? accepting.reason
+        : firstBlocked?.reason || "当前没有可用节点";
+
+  setText("#console-online-nodes", sellerState.user ? `${onlineNodes} / ${nodes.length}` : "--");
+  setText("#console-current-buyers", sellerState.user ? `${currentBuyers} / ${maxBuyers}` : "--");
+  setText("#console-today-earnings", sellerState.user ? formatCredits(todayEarnings) : "--");
+  setText("#console-accept-status", statusLabel);
+  setText("#console-accept-reason", reason);
+}
+
+function renderConsoleModeButtons(node, config) {
+  const modes = [
+    { value: "accepting", label: "开启接单" },
+    { value: "pause_new", label: "暂停接新单" },
+    { value: "stop_all", label: "停止全部接入" },
+  ];
+  return `
+    <div class="segmented-control" role="group" aria-label="接单模式">
+      ${modes
+        .map(
+          (mode) => `
+            <button
+              class="${config.accept_mode === mode.value ? "active" : ""}"
+              type="button"
+              data-node-id="${escapeHtml(node.node_id)}"
+              data-console-mode="${escapeHtml(mode.value)}"
+            >${escapeHtml(mode.label)}</button>
+          `,
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function renderConsoleDayButtons(node, config) {
+  const selectedDays = new Set(config.repeat_days || []);
+  return `
+    <div class="pill-toggle-grid" role="group" aria-label="重复日期">
+      ${consoleWeekDays
+        .map(
+          (day) => `
+            <button
+              class="${selectedDays.has(day) ? "active" : ""}"
+              type="button"
+              data-node-id="${escapeHtml(node.node_id)}"
+              data-console-day="${escapeHtml(day)}"
+            >${escapeHtml(day)}</button>
+          `,
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function renderNotificationButtons(node, config) {
+  const selectedChannels = new Set(config.notification_channels || []);
+  return `
+    <div class="pill-toggle-grid" role="group" aria-label="通知方式">
+      ${consoleNotificationChannels
+        .map(
+          (channel) => `
+            <button
+              class="${selectedChannels.has(channel) ? "active" : ""}"
+              type="button"
+              data-node-id="${escapeHtml(node.node_id)}"
+              data-console-notification="${escapeHtml(channel)}"
+            >${escapeHtml(channel)}</button>
+          `,
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function renderConsoleField(node, config, field) {
+  const nodeID = escapeHtml(node.node_id);
+  const value = config[field.name] ?? "";
+  const label = escapeHtml(field.label);
+  const domain = escapeHtml(field.domain);
+  if (field.type === "select") {
+    return `
+      <label class="console-field">
+        <span>${label}</span>
+        <select data-node-id="${nodeID}" data-console-field="${escapeHtml(field.name)}">
+          ${renderOptions(field.options, value)}
+        </select>
+        <small>${domain}</small>
+      </label>
+    `;
+  }
+  if (field.type === "number") {
+    return `
+      <label class="console-field">
+        <span>${label}</span>
+        <input
+          type="number"
+          min="${escapeHtml(String(field.min ?? 0))}"
+          max="${escapeHtml(String(field.max ?? ""))}"
+          step="${escapeHtml(String(field.step ?? 1))}"
+          value="${escapeHtml(String(value))}"
+          data-node-id="${nodeID}"
+          data-console-field="${escapeHtml(field.name)}"
+        />
+        <small>${domain}</small>
+      </label>
+    `;
+  }
+  if (field.type === "range") {
+    return `
+      <label class="console-field">
+        <span>${label} <b id="${escapeHtml(field.name)}-${nodeID}">${escapeHtml(String(value))}%</b></span>
+        <input
+          type="range"
+          min="${escapeHtml(String(field.min))}"
+          max="${escapeHtml(String(field.max))}"
+          step="${escapeHtml(String(field.step ?? 1))}"
+          value="${escapeHtml(String(value))}"
+          data-node-id="${nodeID}"
+          data-console-field="${escapeHtml(field.name)}"
+        />
+        <small>${domain}</small>
+      </label>
+    `;
+  }
+  if (field.type === "checkbox") {
+    return `
+      <label class="console-field checkbox-field">
+        <span>${label}</span>
+        <input
+          type="checkbox"
+          ${value ? "checked" : ""}
+          data-node-id="${nodeID}"
+          data-console-field="${escapeHtml(field.name)}"
+        />
+        <small>${domain}</small>
+      </label>
+    `;
+  }
+  return `
+    <label class="console-field">
+      <span>${label}</span>
+      <input
+        type="text"
+        value="${escapeHtml(String(value))}"
+        maxlength="${escapeHtml(String(field.maxLength || 80))}"
+        data-node-id="${nodeID}"
+        data-console-field="${escapeHtml(field.name)}"
+      />
+      <small>${domain}</small>
+    </label>
+  `;
+}
+
+function renderConsoleSection(title, fields) {
+  return `
+    <section class="console-config-section">
+      <h3>${escapeHtml(title)}</h3>
+      <div class="console-field-grid">
+        ${fields.join("")}
+      </div>
+    </section>
+  `;
+}
+
+function renderConsoleDetails(node, config) {
+  const status = consoleStatus(node, config);
+  return `
+    <div class="seller-node-details">
+      ${renderConsoleSection("基础与机器", [
+        renderConsoleField(node, config, { name: "display_name", label: "节点名称", type: "text", domain: "1-40 字符", maxLength: 40 }),
+        renderConsoleField(node, config, { name: "machine_name", label: "运行机器", type: "text", domain: "1-40 字符", maxLength: 40 }),
+        renderConsoleField(node, config, { name: "machine_type", label: "设备类型", type: "select", domain: "Mac / Windows / Linux / Server / Other", options: consoleMachineTypes }),
+        renderConsoleField(node, config, { name: "machine_note", label: "设备备注", type: "text", domain: "0-80 字符", maxLength: 80 }),
+      ])}
+
+      ${renderConsoleSection("订阅账号", [
+        renderConsoleField(node, config, { name: "subscription_provider", label: "账号类型", type: "select", domain: "Codex / Claude / ChatGPT / Cursor / Other", options: consoleProviderOptions }),
+        renderConsoleField(node, config, { name: "subscription_label", label: "账号名称", type: "text", domain: "1-40 字符，只展示备注名", maxLength: 40 }),
+      ])}
+
+      <section class="console-config-section">
+        <h3>接单能力</h3>
+        ${renderConsoleModeButtons(node, config)}
+        <div class="console-field-grid">
+          ${renderConsoleField(node, config, { name: "max_buyers", label: "最大接入 buyer 数", type: "number", domain: "1-10，MVP 建议 1-3", min: 1, max: 10 })}
+          <div class="console-readonly">
+            <span>当前接入 buyer 数</span>
+            <strong>${nodeCurrentBuyers(node)} / ${nodeMaxBuyers(node, config)}</strong>
+            <small>系统实时统计</small>
+          </div>
+          <div class="console-readonly">
+            <span>不可接单原因</span>
+            <strong>${escapeHtml(status.reason)}</strong>
+            <small>按控制台优先级计算</small>
+          </div>
+        </div>
+      </section>
+
+      <section class="console-config-section">
+        <h3>运行时间</h3>
+        <div class="console-field-grid">
+          ${renderConsoleField(node, config, { name: "schedule_mode", label: "时间模式", type: "select", domain: "永久开放 / 每天固定时间 / 仅本次开放 / 手动暂停", options: consoleScheduleModes })}
+          ${renderConsoleField(node, config, { name: "daily_windows", label: "每天时间段", type: "text", domain: "00:00-23:59，可多段", maxLength: 40 })}
+          ${renderConsoleField(node, config, { name: "temporary_duration", label: "临时开放时长", type: "select", domain: "1 / 2 / 4 / 8 小时 / 自定义", options: consoleTemporaryDurations })}
+          ${renderConsoleField(node, config, { name: "timezone", label: "时区", type: "select", domain: "跟随设备 / 跟随账户 / 指定时区", options: consoleTimezones })}
+        </div>
+        ${renderConsoleDayButtons(node, config)}
+      </section>
+
+      <section class="console-config-section">
+        <h3>余额保护</h3>
+        <div class="console-field-grid">
+          ${renderConsoleField(node, config, { name: "balance_guard_mode", label: "余额池模式", type: "select", domain: "保底余额 / 固定可售额度 / 可售比例", options: consoleBalanceModes })}
+          ${renderConsoleField(node, config, { name: "reserve_balance", label: "保底余额", type: "number", domain: "大于等于 0", min: 0, step: 1 })}
+          ${renderConsoleField(node, config, { name: "sellable_quota", label: "固定可售额度", type: "number", domain: "大于 0，不能超过可用余额", min: 0, step: 1 })}
+          ${renderConsoleField(node, config, { name: "sellable_ratio", label: "可售余额比例", type: "range", domain: "5%-50%，高级可到 80%", min: 5, max: 80, step: 5 })}
+          ${renderConsoleField(node, config, { name: "daily_spend_cap_enabled", label: "单日消耗上限", type: "checkbox", domain: "关闭 / 开启" })}
+          ${renderConsoleField(node, config, { name: "daily_spend_cap", label: "单日上限额度", type: "number", domain: "开启后填写大于 0 的额度", min: 0, step: 1 })}
+        </div>
+      </section>
+
+      <section class="console-config-section">
+        <h3>收益与异常</h3>
+        <div class="console-field-grid">
+          <div class="console-readonly">
+            <span>今日收益</span>
+            <strong>${formatCredits(nodeTodayEarnings(node))}</strong>
+            <small>节点维度统计</small>
+          </div>
+          <div class="console-readonly">
+            <span>累计收益</span>
+            <strong>${formatCredits(nodeTotalEarnings(node))}</strong>
+            <small>提现归属总 seller 账户</small>
+          </div>
+          ${renderConsoleField(node, config, { name: "failure_action", label: "异常后动作", type: "select", domain: "自动暂停 / 自动停止 / 仅提醒", options: consoleFailureActions })}
+          <div class="console-readonly">
+            <span>通知方式</span>
+            ${renderNotificationButtons(node, config)}
+            <small>第一版只做站内通知展示</small>
+          </div>
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function renderConsoleNode(node) {
+  const config = consoleConfigForNode(node);
+  const status = consoleStatus(node, config);
+  const expanded = sellerState.expandedConsoleNodeID === node.node_id;
+  const toggleLabel = expanded ? "收起" : "配置";
+  const nextMode = config.accept_mode === "accepting" ? "pause_new" : "accepting";
+  const nextModeLabel = config.accept_mode === "accepting" ? "暂停" : "开启";
+  return `
+    <article class="seller-node-card ${expanded ? "expanded" : ""}">
+      <div class="seller-node-row">
+        <div class="seller-node-main">
+          <span class="status-pill ${escapeHtml(status.tone)}">${escapeHtml(status.label)}</span>
+          <h2>${escapeHtml(config.display_name || node.node_id)}</h2>
+          <p>${escapeHtml(status.reason)}</p>
+        </div>
+        <div class="seller-node-meta">
+          <div>
+            <span>运行机器</span>
+            <strong>${escapeHtml(config.machine_name || "待接入")}</strong>
+          </div>
+          <div>
+            <span>订阅账号</span>
+            <strong>${escapeHtml(config.subscription_label || providerLabel(config.subscription_provider))}</strong>
+          </div>
+          <div>
+            <span>当前接入</span>
+            <strong>${nodeCurrentBuyers(node)} / ${nodeMaxBuyers(node, config)}</strong>
+          </div>
+          <div>
+            <span>运行时间</span>
+            <strong>${escapeHtml(config.schedule_mode === "每天固定时间" ? config.daily_windows : config.schedule_mode)}</strong>
+          </div>
+          <div>
+            <span>今日收益</span>
+            <strong>${formatCredits(nodeTodayEarnings(node))}</strong>
+          </div>
+        </div>
+        <div class="seller-node-actions">
+          <button class="secondary-action compact-action" type="button" data-console-toggle="${escapeHtml(node.node_id)}">${toggleLabel}</button>
+          <button class="primary-action compact-action" type="button" data-console-access="${escapeHtml(node.node_id)}">接入</button>
+          <button
+            class="secondary-action compact-action"
+            type="button"
+            data-node-id="${escapeHtml(node.node_id)}"
+            data-console-mode="${escapeHtml(nextMode)}"
+          >${nextModeLabel}</button>
+        </div>
+      </div>
+      <div class="seller-node-foot">
+        <span>节点 ID：<code>${escapeHtml(node.node_id)}</code></span>
+        <span>设备状态：${escapeHtml(node.status || "created")}</span>
+        <span>接入指令：${escapeHtml(consoleSetupStatus(node))}</span>
+        <span>最近心跳：${escapeHtml(node.last_seen_at || "暂无")}</span>
+      </div>
+      ${expanded ? renderConsoleDetails(node, config) : ""}
+    </article>
+  `;
+}
+
+function renderSellerConsole() {
+  renderConsoleSummary();
+  const list = document.querySelector("#seller-console-list");
+  if (!list) {
+    return;
+  }
+  if (!sellerState.user) {
+    list.innerHTML = `
+      <article class="console-empty">
+        <h2>登录后加载 Seller 节点。</h2>
+        <p>控制台会按节点展示机器、订阅账号、运行时间、接单能力、余额保护和收益。</p>
+        <button class="primary-action" type="button" data-console-add>登录并添加节点</button>
+      </article>
+    `;
+    return;
+  }
+  if (sellerState.nodes.length === 0) {
+    list.innerHTML = `
+      <article class="console-empty">
+        <h2>还没有 Seller 节点。</h2>
+        <p>先添加一个待接入节点，再复制这一行的接入指令到对应设备上运行。</p>
+        <button class="primary-action" type="button" data-console-add>添加 Seller 节点</button>
+      </article>
+    `;
+    return;
+  }
+  if (!sellerState.expandedConsoleNodeID || !sellerState.nodes.some((node) => node.node_id === sellerState.expandedConsoleNodeID)) {
+    sellerState.expandedConsoleNodeID = sellerState.nodes[0].node_id;
+  }
+  list.innerHTML = sellerState.nodes.map(renderConsoleNode).join("");
+}
+
+function consoleNodeByID(nodeID) {
+  return sellerState.nodes.find((node) => node.node_id === nodeID);
+}
+
+async function createSellerConsoleNode() {
+  if (!sellerState.user) {
+    openAuthModal("login");
+    return;
+  }
+  const nodeID = defaultConsoleNodeID();
+  const displayName = `Seller 节点 ${sellerState.nodes.length + 1}`;
+  const config = { ...defaultConsoleConfig({ node_id: nodeID }), display_name: displayName };
+  try {
+    const payload = await api("/api/web/seller/nodes", {
+      method: "POST",
+      body: {
+        node_id: nodeID,
+        provider: backendProviderFromValue(config.subscription_provider),
+        max_concurrency: Number(config.max_buyers || 1),
+      },
+    });
+    updateConsoleConfig(payload.node.node_id, config);
+    sellerState.nodes = [payload.node, ...sellerState.nodes];
+    sellerState.activeNode = payload.node;
+    sellerState.expandedConsoleNodeID = payload.node.node_id;
+    renderAll();
+    showToast("Seller 节点已添加");
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
+async function syncConsoleNodeSettings(node, config) {
+  const provider = backendProviderFromValue(config.subscription_provider);
+  const maxConcurrency = nodeMaxBuyers(node, config);
+  if (node.provider === provider && Number(node.max_concurrency || 1) === maxConcurrency) {
+    return node;
+  }
+  const payload = await api(`/api/web/seller/nodes/${encodeURIComponent(node.node_id)}`, {
+    method: "PATCH",
+    body: {
+      provider,
+      max_concurrency: maxConcurrency,
+    },
+  });
+  const updated = payload.node;
+  sellerState.nodes = sellerState.nodes.map((candidate) => (candidate.node_id === updated.node_id ? updated : candidate));
+  return updated;
+}
+
+async function copyConsoleNodeAccess(nodeID) {
+  if (!sellerState.user) {
+    openAuthModal("login");
+    return;
+  }
+  let node = consoleNodeByID(nodeID);
+  if (!node) {
+    showToast("节点不存在");
+    return;
+  }
+  const config = consoleConfigForNode(node);
+  try {
+    node = await syncConsoleNodeSettings(node, config);
+    const setup = await api(`/api/web/seller/nodes/${encodeURIComponent(node.node_id)}/setup-token`, {
+      method: "POST",
+      body: {},
+    });
+    sellerState.setupByNode[node.node_id] = {
+      ...setup,
+      copied_at: new Date().toISOString(),
+    };
+    await copyText(setup.install_command || setup.install_command_unix || "");
+    renderAll();
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
+function updateConsoleField(target) {
+  const nodeID = target.dataset.nodeId;
+  const field = target.dataset.consoleField;
+  if (!nodeID || !field) {
+    return;
+  }
+  const value = target.type === "checkbox" ? target.checked : target.value;
+  updateConsoleConfig(nodeID, { [field]: value });
+  if (field === "sellable_ratio") {
+    const output = document.getElementById(`sellable_ratio-${nodeID}`);
+    if (output) {
+      output.textContent = `${value}%`;
+    }
+  }
+}
+
 function renderAPISnippets() {
   const buyerSnippet = document.querySelector("#buyer-api-snippet");
   if (buyerSnippet) {
@@ -534,6 +1354,7 @@ function renderAll() {
   renderHomeStats();
   renderClientState();
   renderEarnings();
+  renderSellerConsole();
   renderAPISnippets();
 }
 
@@ -553,6 +1374,8 @@ async function loadSellerAccount() {
     sellerState.earnings = null;
     sellerState.activity = [];
     sellerState.doctorResult = null;
+    sellerState.expandedConsoleNodeID = "";
+    sellerState.setupByNode = {};
   }
   renderAll();
 }
@@ -668,6 +1491,8 @@ async function logout() {
   sellerState.earnings = null;
   sellerState.activity = [];
   sellerState.doctorResult = null;
+  sellerState.expandedConsoleNodeID = "";
+  sellerState.setupByNode = {};
   renderAll();
   showToast("已退出");
 }

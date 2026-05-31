@@ -626,6 +626,14 @@ async function handleWebSeller(req: Request, cfg: GatewayConfig): Promise<Respon
       const node = cfg.store.createSellerNode(user.id, body.node_id, body.provider, Number(body.max_concurrency || 0));
       return jsonResponse({ node }, 201);
     }
+    if (req.method === "PATCH" && url.pathname.startsWith("/api/web/seller/nodes/")) {
+      const nodeID = url.pathname.slice("/api/web/seller/nodes/".length);
+      if (!nodeID || nodeID.includes("/")) return apiError(404, "endpoint not found");
+      const body = await req.json().catch(() => undefined) as any;
+      if (!body) return apiError(400, "invalid JSON body");
+      const node = cfg.store.updateSellerNode(user.id, decodeURIComponent(nodeID), body.provider, Number(body.max_concurrency || 0));
+      return jsonResponse({ node });
+    }
     if (req.method === "POST" && url.pathname.startsWith("/api/web/seller/nodes/") && url.pathname.endsWith("/doctor")) {
       const nodeID = url.pathname.slice("/api/web/seller/nodes/".length, -"/doctor".length);
       if (!nodeID) return apiError(404, "endpoint not found");

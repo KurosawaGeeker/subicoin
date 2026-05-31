@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>Subi API</title>
+    <title>Subi 控制台</title>
     <link rel="icon" href="../assets/subi-mark.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
@@ -24,7 +24,7 @@
           <a href="./index.html">首页</a>
           <a href="./client.html">接入</a>
           <a href="./earnings.html">收益</a>
-          <a class="active" href="./api.html">API</a>
+          <a class="active" href="./api.html">控制台</a>
         </div>
         <div class="nav-actions">
           <div class="language-toggle" aria-label="语言">
@@ -38,58 +38,72 @@
     </nav>
 
     <main class="page-main">
-      <section class="page-header">
+      <section class="page-header console-header">
         <a class="back-link" href="./index.html">← 返回首页</a>
-        <h1>给模型使用方一个可替换的便宜 token endpoint。</h1>
+        <p class="kicker">Seller Console</p>
+        <h1>管理每个 Seller 节点的接单能力。</h1>
         <p>
-          使用方继续使用 OpenAI-compatible 客户端原本读取的环境变量名。只需要把值换成 Subi Gateway URL 和 Subi API key。
+          一个节点对应一台机器、一个订阅账号和一套接单规则。每行都可以展开配置，并复制该节点专属接入指令。
         </p>
       </section>
 
-      <section class="api-grid">
-        <article class="api-card">
-          <span class="card-label">使用方配置</span>
-          <h2>Codex CLI</h2>
-          <div class="code-block">
-            <button class="code-copy" type="button">复制</button>
-            <pre><code id="buyer-api-snippet">export OPENAI_BASE_URL="https://api.subi.xyz/v1"
-export OPENAI_API_KEY="sk-subi_xxx"
-
-codex \
-  -c 'model_provider="subi"' \
-  -c 'model_providers.subi.name="Subi"' \
-  -c "model_providers.subi.base_url=\"${OPENAI_BASE_URL}\"" \
-  -c 'model_providers.subi.env_key="OPENAI_API_KEY"' \
-  -c 'model_providers.subi.wire_api="responses"'</code></pre>
-          </div>
+      <section class="console-summary" aria-label="控制台总览">
+        <article class="console-stat">
+          <span>在线节点</span>
+          <strong id="console-online-nodes">--</strong>
+          <p>在线 / 全部节点</p>
         </article>
-
-        <article class="api-card">
-          <span class="card-label">供给节点</span>
-          <h2>Provider 节点</h2>
-          <div class="code-block">
-            <button class="code-copy" type="button">复制</button>
-            <pre><code id="seller-api-snippet">export SUBI_GATEWAY_WS_URL="wss://api.subi.xyz/api/v1/subi/seller/agent/ws"
-export SUBI_SELLER_NODE_TOKEN="seller_node_xxx"
-export SUBI_NODE_ID="seller-001"
-export SELLER_UPSTREAM_MODE="codex-login"
-export SELLER_CODEX_HOME="$HOME/.codex"
-
-./seller-agent
-
-# Claude Code / Anthropic Messages:
-export SELLER_UPSTREAM_MODE="claude-code"
-export SELLER_CLAUDE_HOME="$HOME/.claude"
-export SELLER_ANTHROPIC_BASE_URL="https://api.anthropic.com"
-
-./seller-agent</code></pre>
-          </div>
+        <article class="console-stat">
+          <span>当前接入</span>
+          <strong id="console-current-buyers">--</strong>
+          <p>当前 buyer / 最大 buyer</p>
+        </article>
+        <article class="console-stat">
+          <span>今日收益</span>
+          <strong id="console-today-earnings">--</strong>
+          <p>所有节点汇总</p>
+        </article>
+        <article class="console-stat">
+          <span>接单状态</span>
+          <strong id="console-accept-status">--</strong>
+          <p id="console-accept-reason">登录后加载节点</p>
         </article>
       </section>
 
-      <section class="docs-card">
-        <h2>使用方和供给方都能看懂的错误</h2>
-        <div class="error-grid">
+      <section class="console-toolbar">
+        <div>
+          <span class="card-label">Seller 节点</span>
+          <h2>一个 seller 账户可以绑定多个设备节点。</h2>
+        </div>
+        <button class="primary-action" id="add-seller-node" type="button">添加 Seller 节点</button>
+      </section>
+
+      <section class="seller-node-list" id="seller-console-list" aria-live="polite">
+        <article class="console-empty">
+          <h2>登录后加载 Seller 节点。</h2>
+          <p>每个节点都能单独配置机器、订阅账号、接单时间、余额保护和接入指令。</p>
+        </article>
+      </section>
+
+      <section class="console-reference">
+        <details>
+          <summary>状态优先级</summary>
+          <div class="priority-list">
+            <span>停止全部接入</span>
+            <span>手动暂停接新单</span>
+            <span>机器离线或异常</span>
+            <span>订阅账号异常</span>
+            <span>余额保护触发</span>
+            <span>不在运行时间段</span>
+            <span>当前接入数达到上限</span>
+            <span>可以接单</span>
+          </div>
+        </details>
+      </section>
+
+      <section class="docs-card console-api-reference">
+        <h2>节点接入仍使用同一套 Gateway 协议</h2>
+        <div class="error-grid compact">
           <div>
             <strong>401</strong>
             <span>API key 或 node token 无效</span>
@@ -119,7 +133,7 @@ export SELLER_ANTHROPIC_BASE_URL="https://api.anthropic.com"
     </main>
 
     <footer class="footer">
-      <span>Subi · API · 便宜编程 token</span>
+      <span>Subi · 控制台 · Seller 节点</span>
       <span>|</span>
       <a href="./client.html">接入</a>
       <a href="./earnings.html">收益</a>
@@ -129,7 +143,7 @@ export SELLER_ANTHROPIC_BASE_URL="https://api.anthropic.com"
       <a href="./index.html">首页</a>
       <a href="./client.html">接入</a>
       <a href="./earnings.html">收益</a>
-      <a class="active" href="./api.html">API</a>
+      <a class="active" href="./api.html">控制台</a>
       <button type="button">账户</button>
     </nav>
 

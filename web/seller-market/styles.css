@@ -912,6 +912,7 @@ body.auth-lock {
 .command-list {
   display: grid;
   gap: 14px;
+  margin-bottom: 16px;
 }
 
 .code-block {
@@ -980,6 +981,92 @@ body.auth-lock {
 
 .code-heading .code-copy {
   position: static;
+}
+
+.setup-guide {
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.52);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.setup-guide-heading {
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.setup-guide-heading span {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.setup-guide-heading p,
+.setup-guide-steps p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.setup-guide-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: setup-step;
+}
+
+.setup-guide-steps li {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 12px;
+  padding: 16px;
+  counter-increment: setup-step;
+}
+
+.setup-guide-steps li + li {
+  border-top: 1px solid var(--border);
+}
+
+.setup-guide-steps li::before {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  color: var(--brand);
+  background: rgba(168, 125, 90, 0.08);
+  border-radius: 8px;
+  content: counter(setup-step);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.setup-guide-steps b {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.setup-guide-steps pre {
+  margin: 12px 0 0;
+  overflow-x: auto;
+  padding: 12px;
+  background: rgba(139, 115, 85, 0.05);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.setup-guide-steps code {
+  color: var(--text);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1.65;
+  white-space: pre;
 }
 
 .client-side-card h3 {
@@ -1493,6 +1580,16 @@ td code {
   background: rgba(107, 143, 94, 0.1);
 }
 
+.status-pill.idle {
+  color: #8a6244;
+  background: rgba(168, 125, 90, 0.1);
+}
+
+.status-pill.pending {
+  color: #94743b;
+  background: rgba(148, 116, 59, 0.12);
+}
+
 .status-pill.failed {
   color: #a44d42;
   background: rgba(164, 77, 66, 0.1);
@@ -1500,6 +1597,319 @@ td code {
 
 .api-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.console-header .kicker {
+  margin: 0 0 14px;
+  color: var(--brand);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.console-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.console-stat,
+.console-toolbar,
+.seller-node-card,
+.console-empty,
+.console-reference,
+.console-config-section {
+  background: var(--surface-solid);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.console-stat {
+  min-width: 0;
+  padding: 18px;
+}
+
+.console-stat span,
+.seller-node-meta span,
+.seller-node-foot,
+.console-field span,
+.console-readonly span {
+  color: var(--faint);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.console-stat strong {
+  display: block;
+  margin: 10px 0 8px;
+  color: var(--text);
+  font-size: 30px;
+  font-weight: 300;
+  line-height: 1;
+}
+
+.console-stat p,
+.console-empty p,
+.seller-node-main p,
+.console-field small,
+.console-readonly small,
+.console-reference details,
+.seller-node-foot {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.console-toolbar {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+  padding: 22px;
+}
+
+.console-toolbar h2,
+.console-empty h2,
+.seller-node-main h2,
+.console-config-section h3 {
+  margin: 0;
+  color: var(--text);
+  font-weight: 300;
+  letter-spacing: 0;
+}
+
+.console-toolbar h2 {
+  margin-top: 8px;
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.seller-node-list {
+  display: grid;
+  gap: 14px;
+}
+
+.console-empty {
+  padding: 28px;
+}
+
+.console-empty h2 {
+  margin-bottom: 10px;
+  font-size: 26px;
+  line-height: 1.2;
+}
+
+.console-empty .primary-action {
+  margin-top: 18px;
+}
+
+.seller-node-card {
+  overflow: hidden;
+}
+
+.seller-node-card.expanded {
+  border-color: rgba(168, 125, 90, 0.28);
+  box-shadow: var(--shadow);
+}
+
+.seller-node-row {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.9fr) minmax(0, 1.6fr) auto;
+  gap: 18px;
+  align-items: center;
+  padding: 18px;
+}
+
+.seller-node-main {
+  min-width: 0;
+}
+
+.seller-node-main h2 {
+  margin-top: 10px;
+  overflow-wrap: anywhere;
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+.seller-node-main p {
+  margin-top: 8px;
+}
+
+.seller-node-meta {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.seller-node-meta div,
+.console-readonly {
+  min-width: 0;
+  padding: 12px;
+  background: rgba(139, 115, 85, 0.05);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.seller-node-meta strong,
+.console-readonly strong {
+  display: block;
+  margin-top: 6px;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.seller-node-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.compact-action {
+  min-width: 86px;
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+
+.seller-node-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--border);
+}
+
+.seller-node-foot code {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+.seller-node-details {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  background: rgba(139, 115, 85, 0.035);
+  border-top: 1px solid var(--border);
+}
+
+.console-config-section {
+  padding: 18px;
+}
+
+.console-config-section h3 {
+  margin-bottom: 14px;
+  font-size: 18px;
+}
+
+.console-field-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.console-field {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.console-field input,
+.console-field select {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 11px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.56);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  outline: none;
+}
+
+.console-field input:focus,
+.console-field select:focus {
+  border-color: rgba(168, 125, 90, 0.44);
+}
+
+.checkbox-field {
+  align-content: start;
+}
+
+.checkbox-field input {
+  width: 20px;
+  min-height: 20px;
+  padding: 0;
+}
+
+.console-readonly {
+  display: grid;
+  gap: 6px;
+}
+
+.console-readonly .pill-toggle-grid {
+  margin: 2px 0;
+}
+
+.segmented-control,
+.pill-toggle-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.segmented-control button,
+.pill-toggle-grid button {
+  min-height: 34px;
+  padding: 0 12px;
+  color: var(--muted);
+  background: rgba(139, 115, 85, 0.06);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.segmented-control button.active,
+.pill-toggle-grid button.active {
+  color: var(--brand);
+  background: rgba(168, 125, 90, 0.1);
+  border-color: rgba(168, 125, 90, 0.2);
+}
+
+.console-reference {
+  margin-top: 18px;
+  padding: 18px;
+}
+
+.console-reference summary {
+  cursor: pointer;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.priority-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.priority-list span {
+  min-height: 30px;
+  padding: 7px 10px;
+  color: var(--muted);
+  background: rgba(139, 115, 85, 0.06);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.console-api-reference {
+  margin-top: 18px;
 }
 
 .api-card,
@@ -1608,7 +2018,9 @@ td code {
   .auth-card,
   .auth-provider,
   .auth-form input,
-  .auth-close {
+  .auth-close,
+  .console-field input,
+  .console-field select {
     background: rgba(35, 31, 27, 0.9);
   }
 }
@@ -1654,8 +2066,18 @@ td code {
   .earnings-grid,
   .split-card,
   .api-grid,
-  .error-grid {
+  .error-grid,
+  .console-summary,
+  .seller-node-row,
+  .seller-node-meta,
+  .console-field-grid {
     grid-template-columns: 1fr;
+  }
+
+  .console-toolbar,
+  .seller-node-actions {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .download-tile.active {

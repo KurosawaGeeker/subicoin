@@ -594,6 +594,21 @@ export class Store {
     return row ? sellerNodeFromRow(row) : undefined;
   }
 
+  updateSellerNode(userID: string, nodeIDValue: string, providerValue: string, maxConcurrencyValue: number): SellerNode {
+    const nodeID = trim(nodeIDValue);
+    const existing = this.getSellerNode(userID, nodeID);
+    if (!existing) throw errNotFound();
+    const provider = trim(providerValue) || existing.provider;
+    const maxConcurrency = maxConcurrencyValue > 0 ? maxConcurrencyValue : existing.max_concurrency;
+    const now = isoNow();
+    this.db
+      .query("UPDATE seller_nodes SET provider = ?, max_concurrency = ?, updated_at = ? WHERE seller_user_id = ? AND node_id = ?")
+      .run(provider, maxConcurrency, now, userID, nodeID);
+    const updated = this.getSellerNode(userID, nodeID);
+    if (!updated) throw errNotFound();
+    return updated;
+  }
+
   createSellerSetupToken(userID: string, nodeID: string, ttlMS = 30 * 60 * 1000): SellerSetupToken {
     const row = this.db.query("SELECT id FROM seller_nodes WHERE seller_user_id = ? AND node_id = ?").get(userID, nodeID) as any;
     if (!row) throw errNotFound();
