@@ -1205,7 +1205,6 @@ body.auth-lock {
 }
 
 .download-tile.active {
-  grid-column: span 2;
   border-color: rgba(168, 125, 90, 0.35);
   box-shadow: var(--shadow);
 }
