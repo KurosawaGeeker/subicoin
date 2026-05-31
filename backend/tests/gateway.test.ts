@@ -232,6 +232,12 @@ describe("Gateway", () => {
     expect(rootBody).toContain('id="network-map"');
     expect(rootBody).toContain("./seller-market/app.js");
 
+    const assetResp = await fetch(`${h.baseURL}/assets/subi-mark.svg`);
+    const assetBody = await assetResp.text();
+    expect(assetResp.status, assetBody).toBe(200);
+    expect(assetResp.headers.get("Content-Type")).toBe("image/svg+xml");
+    expect(assetBody).toContain("<svg");
+
     const buyerRedirect = await fetch(`${h.baseURL}/buyer`, { redirect: "manual" });
     expect(buyerRedirect.status).toBe(307);
     expect(buyerRedirect.headers.get("Location")).toBe(`${h.baseURL}/buyer/`);

@@ -824,6 +824,11 @@ async function handleStatic(req: Request, cfg: GatewayConfig): Promise<Response 
   if (url.pathname === "/" || url.pathname === "/index.html") {
     return staticFileResponse(`${cfg.web_dir}/index.html`, "index.html", req.method);
   }
+  if (url.pathname.startsWith("/assets/")) {
+    const rel = decodeURIComponent(url.pathname.slice("/assets/".length));
+    if (!rel || rel.includes("..")) return apiError(404, "endpoint not found");
+    return staticFileResponse(`${cfg.web_dir}/assets/${rel}`, rel, req.method);
+  }
   if (url.pathname === "/buyer") return Response.redirect(`${url.origin}/buyer/`, 307);
   if (url.pathname === "/seller" || url.pathname === "/seller-market") return Response.redirect(`${url.origin}/seller/`, 307);
 
