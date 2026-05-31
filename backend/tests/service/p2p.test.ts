@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   AsyncQueue,
+  bagToHeaders,
   defaultSubiAgentStaleAfterMS,
   SubiP2PError,
   SubiSellerNodeRegistry,
@@ -61,5 +62,31 @@ describe("Subi seller registry", () => {
     expect(() => registry.reserveNodeForTest("", "req-unsafe")).toThrow(SubiP2PError);
     registry.registerNodeForTest({ id: "seller-login", upstreamMode: "codex-login" });
     expect(registry.reserveNodeForTest("", "req-safe").nodeID).toBe("seller-login");
+  });
+
+  test("dispatches Anthropic Messages only to Claude Code sellers", () => {
+    const registry = new SubiSellerNodeRegistry();
+    registry.registerNodeForTest({ id: "seller-codex", upstreamMode: "codex-login" });
+    registry.registerNodeForTest({ id: "seller-claude", upstreamMode: "claude-code" });
+
+    expect(registry.reserveNodeForPathForTest("session-a", "req-claude", "/v1/messages").nodeID).toBe("seller-claude");
+    expect(registry.reserveNodeForPathForTest("session-b", "req-codex", "/v1/responses").nodeID).toBe("seller-codex");
+    expect(() => registry.reserveNodeForPathForTest("session-c", "req-chat", "/v1/chat/completions")).toThrow(SubiP2PError);
+  });
+
+  test("does not forward transport response headers from seller agents", () => {
+    const headers = bagToHeaders({
+      "Content-Type": ["application/json"],
+      "Content-Encoding": ["gzip"],
+      "Content-Length": ["100"],
+      Connection: ["keep-alive"],
+      "Transfer-Encoding": ["chunked"],
+    });
+
+    expect(headers.get("Content-Type")).toBe("application/json");
+    expect(headers.get("Content-Encoding")).toBeNull();
+    expect(headers.get("Content-Length")).toBeNull();
+    expect(headers.get("Connection")).toBeNull();
+    expect(headers.get("Transfer-Encoding")).toBeNull();
   });
 });

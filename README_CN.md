@@ -260,7 +260,27 @@ export SELLER_CODEX_BASE_URL="https://chatgpt.com/backend-api/codex"
 ./dist/seller-agent
 ```
 
-真实买家流量只使用 `codex-login`。它读取卖家本机 Codex ChatGPT 登录态，并把 Responses 请求作为纯网络请求转发到 Codex 后端；不会启动 `codex exec`，不会启动 `codex app-server`，也不会给买家请求提供卖家机器上的 cwd、shell 或工具运行环境。
+真实买家流量支持两种安全的纯网络 upstream：
+
+- `codex-login`：读取卖家本机 Codex ChatGPT 登录态，并把 Responses 请求转发到 Codex 后端。
+- `claude-code`：读取卖家本机 Claude Code 凭据，或使用 `SELLER_ANTHROPIC_AUTH_TOKEN` / `SELLER_ANTHROPIC_API_KEY`，并把 Anthropic Messages 请求转发到 Anthropic API。
+
+`claude-code` 手动配置示例。macOS 上 Claude Code 登录态默认在 Keychain，不会写 `~/.claude/.credentials.json`；这种情况下先运行 `claude setup-token`，再把生成的 token 写入 `SELLER_CLAUDE_CODE_OAUTH_TOKEN`。
+
+```bash
+export SUBI_GATEWAY_WS_URL="ws://<gateway-host>:18080/api/v1/subi/seller/agent/ws"
+export SUBI_SELLER_NODE_TOKEN="<seller node token>"
+export SUBI_NODE_ID="seller-claude-001"
+export SELLER_UPSTREAM_MODE="claude-code"
+export SELLER_WORKERS=1
+export SELLER_CLAUDE_HOME="$HOME/.claude"
+export SELLER_ANTHROPIC_BASE_URL="https://api.anthropic.com"
+export SELLER_CLAUDE_CODE_OAUTH_TOKEN="<claude setup-token output>"
+
+./dist/seller-agent
+```
+
+这两种模式都不会启动 `codex exec`、`codex app-server` 或 `claude` CLI，不会给买家请求提供卖家机器上的 cwd、shell 或工具运行环境。
 
 旧的本地执行模式（`codex-app-server`、`codex-exec` 和 `http`）已从 seller-agent 删除，因为它们会把卖家机器的 cwd、shell 和工具运行环境暴露给买家流量。
 
@@ -294,6 +314,7 @@ codex
 - Buyer Credit 余额和扣费账本
 - 固定价格的 Request Fill 账本
 - Seller 收益账本
+- Codex Responses 和 Claude Code / Anthropic Messages seller upstream
 - Buyer Web 的 API key 管理、Usage 和 Credit ledger 展示
 
 ## 当前未完成

@@ -120,6 +120,27 @@ describe("Gateway", () => {
     expect(resp.headers.get("Content-Type")?.split(";")[0]).toBe("application/json");
   });
 
+  test("routes Anthropic Messages to Claude Code sellers", async () => {
+    const h = newGatewayTestHarness(true);
+    const codexSeller = await h.startSeller("seller-codex", ["SHOULD_NOT_ROUTE"], "seller-secret", "codex-login");
+    const claudeSeller = await h.startSeller("seller-claude", ["CLAUDE_ROUTE_OK"], "seller-secret", "claude-code");
+
+    const resp = await fetch(`${h.baseURL}/v1/messages`, {
+      method: "POST",
+      headers: { Authorization: "Bearer buyer-secret", "Content-Type": "application/json", "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 128, messages: [{ role: "user", content: "hi" }] }),
+    });
+    const body = await resp.text();
+    expect(resp.status, body).toBe(200);
+    expect(body).toContain("CLAUDE_ROUTE_OK");
+    expect(resp.headers.get("X-Subi-Seller-Node")).toBe("seller-claude");
+    const req = await claudeSeller.nextRequest();
+    expect(req.path).toBe("/v1/messages");
+    expect(codexSeller.pendingRequestCount()).toBe(0);
+    codexSeller.close();
+    claudeSeller.close();
+  });
+
   test("web seller setup and DB-backed buyer key", async () => {
     const store = newStore();
     const h = newGatewayTestHarness(true, store);
@@ -247,9 +268,9 @@ function newGatewayTestHarness(sessionContextEnabled: boolean, store?: Store) {
   const baseURL = server.url.toString().replace(/\/$/, "");
   return {
     baseURL,
-    async startSeller(nodeID: string, responses: string[], token = "seller-secret") {
+    async startSeller(nodeID: string, responses: string[], token = "seller-secret", upstreamMode = "codex-login") {
       const wsURL = baseURL.replace(/^http/, "ws") + `/api/v1/subi/seller/agent/ws?token=${encodeURIComponent(token)}`;
-      const seller = new GatewayTestSeller(wsURL, nodeID, responses);
+      const seller = new GatewayTestSeller(wsURL, nodeID, responses, upstreamMode);
       await seller.connect();
       return seller;
     },
@@ -286,6 +307,7 @@ class GatewayTestSeller {
     private readonly wsURL: string,
     private readonly nodeID: string,
     private readonly responses: string[],
+    private readonly upstreamMode: string,
   ) {}
 
   async connect(): Promise<void> {
@@ -300,7 +322,7 @@ class GatewayTestSeller {
       node_id: this.nodeID,
       version: "test",
       max_concurrency: 1,
-      meta: { upstream_mode: "codex-login" },
+      meta: { upstream_mode: this.upstreamMode },
     });
     ws.addEventListener("message", (event) => this.handleMessage(String(event.data)));
     await delay(50);
@@ -319,6 +341,10 @@ class GatewayTestSeller {
         throw new Error("timed out waiting for seller request");
       }),
     ]);
+  }
+
+  pendingRequestCount(): number {
+    return this.requests.length;
   }
 
   private handleMessage(raw: string): void {

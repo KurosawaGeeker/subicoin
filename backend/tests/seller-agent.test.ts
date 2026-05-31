@@ -15,7 +15,7 @@ afterEach(async () => {
 
 describe("seller-agent codex-login upstream", () => {
   test("rejects legacy local execution upstreams by default", async () => {
-    expect(() => validateAgentConfig(agentConfig({ upstream_mode: "codex-app-server" }))).toThrow("must be codex-login");
+    expect(() => validateAgentConfig(agentConfig({ upstream_mode: "codex-app-server" }))).toThrow("must be codex-login or claude-code");
     const socket = new CollectingSocket();
     await handleRequest(agentConfig({ upstream_mode: "codex-exec" }), socket, requestEnvelope("req-unsafe", "do not run locally"));
     const error = socket.sent.find((sent) => sent.type === "response_error");
@@ -194,6 +194,115 @@ describe("seller-agent codex-login upstream", () => {
     const chunk = socket.sent.find((sent) => sent.type === subiEnvelopeResponseChunk);
     expect(new TextDecoder().decode(chunk?.data)).toContain("REFRESHED_OK");
   });
+
+  test("proxies Anthropic Messages with Claude Code auth token", async () => {
+    let upstreamPath = "";
+    let upstreamBody = "";
+    let upstreamHeaders: Record<string, string> = {};
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      async fetch(req) {
+        const url = new URL(req.url);
+        upstreamPath = `${url.pathname}${url.search}`;
+        upstreamBody = await req.text();
+        upstreamHeaders = Object.fromEntries(req.headers.entries());
+        return new Response(JSON.stringify({ id: "msg_test", type: "message", content: [{ type: "text", text: "CLAUDE_OK" }] }), {
+          headers: { "Content-Type": "application/json" },
+        });
+      },
+    });
+    servers.push(server);
+
+    const cfg = agentConfig({
+      upstream_mode: "claude-code",
+      anthropic_base_url: server.url.toString().replace(/\/$/, ""),
+      anthropic_auth_token: "claude-oauth-token",
+    });
+    const socket = new CollectingSocket();
+    const env = anthropicEnvelope("req-claude", "hello claude");
+    env.path = "/v1/messages?trace=1";
+    env.headers = {
+      Authorization: ["Bearer buyer-key"],
+      "X-Api-Key": ["buyer-key"],
+      "Anthropic-Version": ["2023-06-01"],
+      "Content-Type": ["application/json"],
+    };
+
+    await handleRequest(cfg, socket, env);
+
+    expect(upstreamPath).toBe("/v1/messages?trace=1");
+    expect(upstreamBody).toBe(new TextDecoder().decode(env.body));
+    expect(upstreamHeaders.authorization).toBe("Bearer claude-oauth-token");
+    expect(upstreamHeaders["x-api-key"]).toBeUndefined();
+    expect(upstreamHeaders["anthropic-version"]).toBe("2023-06-01");
+    expect(upstreamHeaders["anthropic-beta"]).toContain("claude-code-20250219");
+    expect(upstreamHeaders["anthropic-beta"]).toContain("oauth-2025-04-20");
+    expect(upstreamHeaders["user-agent"]).toContain("subi-seller-agent");
+    const start = socket.sent.find((sent) => sent.type === subiEnvelopeResponseStart);
+    expect(start?.headers?.["X-Subi-Upstream-Mode"]).toEqual(["claude-code"]);
+    const chunk = socket.sent.find((sent) => sent.type === subiEnvelopeResponseChunk);
+    expect(new TextDecoder().decode(chunk?.data)).toContain("CLAUDE_OK");
+  });
+
+  test("loads Claude Code OAuth token from credentials file", async () => {
+    const dir = await mkdtemp(`${tmpdir()}/subi-claude-home-`);
+    cleanupPaths.push(dir);
+    await Bun.write(`${dir}/.credentials.json`, JSON.stringify({ claudeAiOauth: { accessToken: "credential-token" } }));
+    let auth = "";
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch(req) {
+        auth = req.headers.get("authorization") || "";
+        return new Response(JSON.stringify({ content: [{ type: "text", text: "CLAUDE_CREDENTIAL_OK" }] }), { headers: { "Content-Type": "application/json" } });
+      },
+    });
+    servers.push(server);
+
+    const socket = new CollectingSocket();
+    await handleRequest(
+      agentConfig({
+        upstream_mode: "claude-code",
+        claude_home: dir,
+        anthropic_base_url: server.url.toString().replace(/\/$/, ""),
+      }),
+      socket,
+      anthropicEnvelope("req-claude-credentials", "hello credentials"),
+    );
+
+    expect(auth).toBe("Bearer credential-token");
+    const chunk = socket.sent.find((sent) => sent.type === subiEnvelopeResponseChunk);
+    expect(new TextDecoder().decode(chunk?.data)).toContain("CLAUDE_CREDENTIAL_OK");
+  });
+
+  test("uses Claude Code OAuth token from environment config before credentials file", async () => {
+    let auth = "";
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch(req) {
+        auth = req.headers.get("authorization") || "";
+        return new Response(JSON.stringify({ content: [{ type: "text", text: "CLAUDE_ENV_TOKEN_OK" }] }), { headers: { "Content-Type": "application/json" } });
+      },
+    });
+    servers.push(server);
+
+    const socket = new CollectingSocket();
+    await handleRequest(
+      agentConfig({
+        upstream_mode: "claude-code",
+        anthropic_base_url: server.url.toString().replace(/\/$/, ""),
+        claude_code_oauth_token: "claude-code-oauth-token",
+      }),
+      socket,
+      anthropicEnvelope("req-claude-env-token", "hello env token"),
+    );
+
+    expect(auth).toBe("Bearer claude-code-oauth-token");
+    const chunk = socket.sent.find((sent) => sent.type === subiEnvelopeResponseChunk);
+    expect(new TextDecoder().decode(chunk?.data)).toContain("CLAUDE_ENV_TOKEN_OK");
+  });
 });
 
 class CollectingSocket implements JSONSocket {
@@ -215,6 +324,12 @@ function agentConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
     codex_home: `${tmpdir()}/missing-codex-home`,
     codex_base_url: "https://chatgpt.com/backend-api/codex",
     codex_refresh_url: "https://auth.openai.com/oauth/token",
+    claude_home: `${tmpdir()}/missing-claude-home`,
+    anthropic_base_url: "https://api.anthropic.com",
+    anthropic_auth_token: "",
+    anthropic_api_key: "",
+    claude_code_oauth_token: "",
+    anthropic_version: "2023-06-01",
     ...overrides,
   };
 }
@@ -227,6 +342,26 @@ function requestEnvelope(requestID: string, input: string): SubiEnvelope {
     path: "/v1/responses",
     headers: { "Content-Type": ["application/json"] },
     body: new TextEncoder().encode(JSON.stringify({ model: "subi-codex-subscription", input })),
+    stream: false,
+    timeout_ms: 10000,
+    session_hash: "session-hash",
+  };
+}
+
+function anthropicEnvelope(requestID: string, text: string): SubiEnvelope {
+  return {
+    type: "request_start",
+    request_id: requestID,
+    method: "POST",
+    path: "/v1/messages",
+    headers: { "Content-Type": ["application/json"], "Anthropic-Version": ["2023-06-01"] },
+    body: new TextEncoder().encode(
+      JSON.stringify({
+        model: "claude-sonnet-4-5",
+        max_tokens: 128,
+        messages: [{ role: "user", content: text }],
+      }),
+    ),
     stream: false,
     timeout_ms: 10000,
     session_hash: "session-hash",

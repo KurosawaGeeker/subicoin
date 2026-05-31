@@ -623,7 +623,9 @@ function handleSellerSetup(req: Request, cfg: GatewayConfig): Response {
       subi_node_id: setup.node_id,
       seller_upstream_mode: setup.provider,
       seller_codex_workers: setup.max_concurrency,
+      seller_workers: setup.max_concurrency,
       seller_codex_home: "$HOME/.codex",
+      seller_claude_home: "$HOME/.claude",
       seller_config_env: sellerConfigEnv(wsURL, setup),
       seller_agent_configured: true,
     });
@@ -731,6 +733,9 @@ function bearerToken(req: Request): string {
 function isForwardablePath(path: string): boolean {
   return (
     path === "/v1/messages" ||
+    path.startsWith("/v1/messages/") ||
+    path === "/messages" ||
+    path.startsWith("/messages/") ||
     path === "/v1/responses" ||
     path.startsWith("/v1/responses/") ||
     path === "/responses" ||
@@ -762,7 +767,7 @@ function sessionHash(req: Request, body: Uint8Array): string {
 
 function copyResponseHeaders(dst: Headers, src?: HeaderBag): void {
   for (const [key, values] of Object.entries(src ?? {})) {
-    if (["content-length", "connection", "transfer-encoding"].includes(key.toLowerCase())) continue;
+    if (["content-encoding", "content-length", "connection", "transfer-encoding"].includes(key.toLowerCase())) continue;
     for (const value of values) dst.append(key, value);
   }
 }
@@ -791,11 +796,24 @@ function sseError(message: string): string {
 }
 
 function sellerConfigEnv(wsURL: string, setup: SellerSetupConfig): string {
+  if (setup.provider === "claude-code") {
+    return `SUBI_GATEWAY_WS_URL=${JSON.stringify(wsURL)}
+SUBI_SELLER_NODE_TOKEN=${JSON.stringify(setup.node_token)}
+SUBI_NODE_ID=${JSON.stringify(setup.node_id)}
+SELLER_UPSTREAM_MODE="claude-code"
+SELLER_CODEX_WORKERS=${setup.max_concurrency}
+SELLER_WORKERS=${setup.max_concurrency}
+SELLER_CLAUDE_HOME="$HOME/.claude"
+SELLER_ANTHROPIC_BASE_URL="https://api.anthropic.com"
+SELLER_CLAUDE_CODE_OAUTH_TOKEN=""
+SELLER_ANTHROPIC_VERSION="2023-06-01"`;
+  }
   return `SUBI_GATEWAY_WS_URL=${JSON.stringify(wsURL)}
 SUBI_SELLER_NODE_TOKEN=${JSON.stringify(setup.node_token)}
 SUBI_NODE_ID=${JSON.stringify(setup.node_id)}
 SELLER_UPSTREAM_MODE=${JSON.stringify(setup.provider)}
 SELLER_CODEX_WORKERS=${setup.max_concurrency}
+SELLER_WORKERS=${setup.max_concurrency}
 SELLER_CODEX_HOME="$HOME/.codex"
 SELLER_CODEX_BASE_URL="https://chatgpt.com/backend-api/codex"`;
 }

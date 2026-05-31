@@ -279,11 +279,36 @@ Run the seller doctor after installation:
 `SELLER_CODEX_WORKERS` controls the seller-side network worker pool size and is
 reported to the Gateway as this node's `max_concurrency`.
 
-`codex-login` is the only mode intended for buyer traffic. It reads the seller's
-Codex ChatGPT login state from `SELLER_CODEX_HOME/auth.json` and proxies
-Responses requests to the Codex backend. It does not start `codex exec`, does
-not start `codex app-server`, and does not give buyer requests a seller-side
-cwd, shell, or tool runtime.
+Buyer traffic supports two safe network-only upstream modes:
+
+- `codex-login` reads the seller's Codex ChatGPT login state from
+  `SELLER_CODEX_HOME/auth.json` and proxies Responses requests to the Codex
+  backend.
+- `claude-code` reads the seller's Claude Code credentials from
+  `SELLER_CLAUDE_HOME/.credentials.json`, or uses
+  `SELLER_ANTHROPIC_AUTH_TOKEN` / `SELLER_ANTHROPIC_API_KEY`, and proxies
+  Anthropic Messages requests to the Anthropic API.
+
+Manual `claude-code` configuration example. On macOS, Claude Code stores
+interactive login credentials in Keychain instead of
+`~/.claude/.credentials.json`; run `claude setup-token` and put the generated
+token in `SELLER_CLAUDE_CODE_OAUTH_TOKEN`.
+
+```bash
+export SUBI_GATEWAY_WS_URL="ws://<gateway-host>:18080/api/v1/subi/seller/agent/ws"
+export SUBI_SELLER_NODE_TOKEN="<seller node token>"
+export SUBI_NODE_ID="seller-claude-001"
+export SELLER_UPSTREAM_MODE="claude-code"
+export SELLER_WORKERS=1
+export SELLER_CLAUDE_HOME="$HOME/.claude"
+export SELLER_ANTHROPIC_BASE_URL="https://api.anthropic.com"
+export SELLER_CLAUDE_CODE_OAUTH_TOKEN="<claude setup-token output>"
+
+./dist/seller-agent
+```
+
+Neither mode starts `codex exec`, `codex app-server`, or the `claude` CLI, and
+neither gives buyer requests a seller-side cwd, shell, or tool runtime.
 
 The old local-execution seller modes (`codex-app-server`, `codex-exec`, and
 `http`) have been removed from seller-agent because they exposed the seller

@@ -128,7 +128,12 @@ export class SubiSellerNodeRegistry {
   }
 
   reserveNodeForTest(sessionHash: string, requestID: string): { nodeID: string; previousNodeID: string } {
-    const result = this.reserveNode(sessionHash, requestID);
+    const result = this.reserveNode(sessionHash, requestID, "/v1/responses");
+    return { nodeID: result.node.id, previousNodeID: result.previousNodeID };
+  }
+
+  reserveNodeForPathForTest(sessionHash: string, requestID: string, path: string): { nodeID: string; previousNodeID: string } {
+    const result = this.reserveNode(sessionHash, requestID, path);
     return { nodeID: result.node.id, previousNodeID: result.previousNodeID };
   }
 
@@ -209,7 +214,7 @@ export class SubiSellerNodeRegistry {
     const timeout = req.timeout_ms && req.timeout_ms > 0 ? req.timeout_ms : defaultSubiRequestTimeoutMS;
     const requestID = trim(req.request_id) || newSubiP2PRequestID();
     const state: RequestState = { queue: new AsyncQueue<SubiP2PResponseEvent>(), closed: false };
-    const reservation = this.reserveNode(trim(req.session_hash), requestID);
+    const reservation = this.reserveNode(trim(req.session_hash), requestID, req.path);
     const node = reservation.node;
     this.requests.set(requestID, state);
 
@@ -296,7 +301,7 @@ export class SubiSellerNodeRegistry {
     if (node) node.lastSeen = Date.now();
   }
 
-  private reserveNode(sessionHash: string, requestID: string): { node: SellerNode; previousNodeID: string } {
+  private reserveNode(sessionHash: string, requestID: string, path: string): { node: SellerNode; previousNodeID: string } {
     const now = Date.now();
     let previousNodeID = "";
     if (sessionHash) {
@@ -304,7 +309,7 @@ export class SubiSellerNodeRegistry {
       if (stickyNodeID) {
         previousNodeID = stickyNodeID;
         const node = this.nodes.get(stickyNodeID);
-        if (!node || now - node.lastSeen > defaultSubiAgentStaleAfterMS || !nodeDispatchable(node)) {
+        if (!node || now - node.lastSeen > defaultSubiAgentStaleAfterMS || !nodeDispatchable(node, path)) {
           this.sticky.delete(sessionHash);
         } else {
           if (!nodeHasCapacity(node)) throw errAgentBusy();
@@ -315,7 +320,7 @@ export class SubiSellerNodeRegistry {
     }
 
     for (const node of this.nodes.values()) {
-      if (now - node.lastSeen > defaultSubiAgentStaleAfterMS || !nodeDispatchable(node) || !nodeHasCapacity(node)) continue;
+      if (now - node.lastSeen > defaultSubiAgentStaleAfterMS || !nodeDispatchable(node, path) || !nodeHasCapacity(node)) continue;
       reserveNodeRequest(node, requestID);
       if (sessionHash) this.sticky.set(sessionHash, node.id);
       return { node, previousNodeID };
@@ -455,7 +460,7 @@ export function headersToBag(headers: Headers): HeaderBag {
 export function bagToHeaders(bag?: HeaderBag): Headers {
   const headers = new Headers();
   for (const [key, values] of Object.entries(bag ?? {})) {
-    if (["content-length", "connection", "transfer-encoding"].includes(key.toLowerCase())) continue;
+    if (["content-encoding", "content-length", "connection", "transfer-encoding"].includes(key.toLowerCase())) continue;
     for (const value of values) headers.append(key, value);
   }
   return headers;
@@ -471,8 +476,36 @@ function nodeHasCapacity(node: SellerNode): boolean {
   return node.activeRequests.size < node.maxConcurrency;
 }
 
-function nodeDispatchable(node: SellerNode): boolean {
-  return node.upstreamMode === "codex-login";
+function nodeDispatchable(node: SellerNode, path: string): boolean {
+  if (node.upstreamMode === "codex-login") return isResponsesPath(path);
+  if (node.upstreamMode === "claude-code") return isMessagesPath(path);
+  return false;
+}
+
+function isResponsesPath(path: string): boolean {
+  const clean = pathOnly(path);
+  return (
+    clean === "/v1/responses" ||
+    clean === "/responses" ||
+    clean === "/backend-api/codex/responses" ||
+    clean.startsWith("/v1/responses/") ||
+    clean.startsWith("/responses/") ||
+    clean.startsWith("/backend-api/codex/responses/")
+  );
+}
+
+function isMessagesPath(path: string): boolean {
+  const clean = pathOnly(path);
+  return clean === "/v1/messages" || clean === "/messages" || clean.startsWith("/v1/messages/") || clean.startsWith("/messages/");
+}
+
+function pathOnly(path: string): string {
+  try {
+    const parsed = path.startsWith("http://") || path.startsWith("https://") ? new URL(path) : new URL(path || "/", "http://subi.local");
+    return parsed.pathname.replace(/\/+$/, "") || "/";
+  } catch {
+    return "/";
+  }
 }
 
 function reserveNodeRequest(node: SellerNode, requestID: string): void {

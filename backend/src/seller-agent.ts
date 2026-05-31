@@ -27,6 +27,12 @@ export interface AgentConfig {
   codex_home: string;
   codex_base_url: string;
   codex_refresh_url: string;
+  claude_home: string;
+  anthropic_base_url: string;
+  anthropic_auth_token: string;
+  anthropic_api_key: string;
+  claude_code_oauth_token: string;
+  anthropic_version: string;
 }
 
 export function loadAgentConfig(): AgentConfig {
@@ -46,6 +52,12 @@ export function loadAgentConfig(): AgentConfig {
     codex_home: envString("SELLER_CODEX_HOME", envString("CODEX_HOME", `${Bun.env.HOME || ""}/.codex`)),
     codex_base_url: envString("SELLER_CODEX_BASE_URL", "https://chatgpt.com/backend-api/codex").replace(/\/+$/, ""),
     codex_refresh_url: envString("SELLER_CODEX_REFRESH_URL", envString("CODEX_REFRESH_TOKEN_URL_OVERRIDE", "https://auth.openai.com/oauth/token")),
+    claude_home: envString("SELLER_CLAUDE_HOME", envString("CLAUDE_CONFIG_DIR", `${Bun.env.HOME || ""}/.claude`)),
+    anthropic_base_url: envString("SELLER_ANTHROPIC_BASE_URL", envString("ANTHROPIC_BASE_URL", "https://api.anthropic.com")).replace(/\/+$/, ""),
+    anthropic_auth_token: envString("SELLER_ANTHROPIC_AUTH_TOKEN", envString("ANTHROPIC_AUTH_TOKEN")),
+    anthropic_api_key: envString("SELLER_ANTHROPIC_API_KEY", envString("ANTHROPIC_API_KEY")),
+    claude_code_oauth_token: envString("SELLER_CLAUDE_CODE_OAUTH_TOKEN", envString("CLAUDE_CODE_OAUTH_TOKEN")),
+    anthropic_version: envString("SELLER_ANTHROPIC_VERSION", envString("ANTHROPIC_VERSION", "2023-06-01")),
   };
 }
 
@@ -55,10 +67,19 @@ export function validateAgentConfig(cfg: AgentConfig): void {
   if (!cfg.node_id) throw new Error("SUBI_NODE_ID or hostname is required");
   if (cfg.worker_count <= 0) throw new Error("SELLER_CODEX_WORKERS or SELLER_WORKERS must be greater than 0");
   if (cfg.worker_queue_len <= 0) throw new Error("SELLER_WORKER_QUEUE_SIZE must be greater than 0");
-  if (cfg.upstream_mode !== "codex-login") throw new Error(`SELLER_UPSTREAM_MODE must be codex-login, got ${JSON.stringify(cfg.upstream_mode)}`);
-  if (!cfg.codex_home) throw new Error("SELLER_CODEX_HOME or CODEX_HOME is required for codex-login mode");
-  if (!cfg.codex_base_url) throw new Error("SELLER_CODEX_BASE_URL is required for codex-login mode");
-  if (!cfg.codex_refresh_url) throw new Error("SELLER_CODEX_REFRESH_URL is required for codex-login mode");
+  if (!["codex-login", "claude-code"].includes(cfg.upstream_mode)) {
+    throw new Error(`SELLER_UPSTREAM_MODE must be codex-login or claude-code, got ${JSON.stringify(cfg.upstream_mode)}`);
+  }
+  if (cfg.upstream_mode === "codex-login") {
+    if (!cfg.codex_home) throw new Error("SELLER_CODEX_HOME or CODEX_HOME is required for codex-login mode");
+    if (!cfg.codex_base_url) throw new Error("SELLER_CODEX_BASE_URL is required for codex-login mode");
+    if (!cfg.codex_refresh_url) throw new Error("SELLER_CODEX_REFRESH_URL is required for codex-login mode");
+  }
+  if (cfg.upstream_mode === "claude-code") {
+    if (!cfg.claude_home) throw new Error("SELLER_CLAUDE_HOME or CLAUDE_CONFIG_DIR is required for claude-code mode");
+    if (!cfg.anthropic_base_url) throw new Error("SELLER_ANTHROPIC_BASE_URL or ANTHROPIC_BASE_URL is required for claude-code mode");
+    if (!cfg.anthropic_version) throw new Error("SELLER_ANTHROPIC_VERSION or ANTHROPIC_VERSION is required for claude-code mode");
+  }
 }
 
 export async function runSellerAgentUntilClosed(cfg: AgentConfig, signal?: AbortSignal): Promise<void> {
@@ -189,11 +210,16 @@ async function closeAgentWorkers(workers: AgentWorkerState[]): Promise<void> {
 }
 
 export async function handleRequest(cfg: AgentConfig, socket: JSONSocket, env: SubiEnvelope): Promise<void> {
-  if (cfg.upstream_mode !== "codex-login") {
-    sendAgentError(socket, env.request_id || "", `unsupported seller upstream mode: ${cfg.upstream_mode}`);
-    return;
+  switch (cfg.upstream_mode) {
+    case "codex-login":
+      await handleCodexLoginRequest(cfg, socket, env);
+      return;
+    case "claude-code":
+      await handleClaudeCodeRequest(cfg, socket, env);
+      return;
+    default:
+      sendAgentError(socket, env.request_id || "", `unsupported seller upstream mode: ${cfg.upstream_mode}`);
   }
-  await handleCodexLoginRequest(cfg, socket, env);
 }
 
 async function handleCodexLoginRequest(cfg: AgentConfig, socket: JSONSocket, env: SubiEnvelope): Promise<void> {
@@ -257,12 +283,62 @@ function codexLoginRequestBody(body?: Uint8Array): Uint8Array | undefined {
 }
 
 function sendCodexLoginJSON(socket: JSONSocket, env: SubiEnvelope, statusCode: number, payload: unknown): void {
+  sendAgentJSON(socket, env, statusCode, payload, "codex-login");
+}
+
+async function handleClaudeCodeRequest(cfg: AgentConfig, socket: JSONSocket, env: SubiEnvelope): Promise<void> {
+  const upstreamPath = claudeCodeMessagesPath(env.path || "");
+  if (!upstreamPath) {
+    sendAgentJSON(socket, env, 400, { error: { type: "invalid_request_error", message: "claude-code mode only supports Anthropic Messages requests" } }, "claude-code");
+    return;
+  }
+  const url = anthropicURL(cfg.anthropic_base_url, upstreamPath);
+  const body = env.body ? (new Uint8Array(env.body) as unknown as BodyInit) : undefined;
+
+  let resp: Response;
+  try {
+    resp = await fetchClaudeCode(cfg, env, url, body);
+  } catch (error) {
+    sendAgentError(socket, env.request_id || "", `claude-code request failed: ${error}`);
+    return;
+  }
+
+  const responseHeaders = fetchHeadersToBag(resp.headers);
+  responseHeaders["X-Subi-Upstream-Mode"] = [cfg.upstream_mode];
+  sendEnvelope(socket, {
+    type: subiEnvelopeResponseStart,
+    request_id: env.request_id,
+    status_code: resp.status,
+    headers: responseHeaders,
+  });
+  await streamFetchResponse(socket, env.request_id || "", resp);
+  sendEnvelope(socket, { type: subiEnvelopeResponseEnd, request_id: env.request_id });
+}
+
+async function fetchClaudeCode(cfg: AgentConfig, env: SubiEnvelope, url: string, body: BodyInit | undefined): Promise<Response> {
+  const auth = await loadClaudeCodeAuth(cfg);
+  const headers = claudeCodeHeaders(env, cfg, auth);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), requestTimeoutMS(env));
+  try {
+    return await fetch(url, {
+      method: env.method || "POST",
+      headers,
+      body,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function sendAgentJSON(socket: JSONSocket, env: SubiEnvelope, statusCode: number, payload: unknown, upstreamMode: string): void {
   const body = new TextEncoder().encode(JSON.stringify(payload));
   sendEnvelope(socket, {
     type: subiEnvelopeResponseStart,
     request_id: env.request_id,
     status_code: statusCode,
-    headers: { "Content-Type": ["application/json"], "X-Subi-Upstream-Mode": ["codex-login"] },
+    headers: { "Content-Type": ["application/json"], "X-Subi-Upstream-Mode": [upstreamMode] },
   });
   sendEnvelope(socket, { type: subiEnvelopeResponseChunk, request_id: env.request_id, data: body });
   sendEnvelope(socket, { type: subiEnvelopeResponseEnd, request_id: env.request_id });
@@ -301,6 +377,7 @@ function bagToFetchHeaders(bag?: HeaderBag): Headers {
 function fetchHeadersToBag(headers: Headers): HeaderBag {
   const out: HeaderBag = {};
   headers.forEach((value, key) => {
+    if (["content-encoding", "content-length", "connection", "transfer-encoding"].includes(key.toLowerCase())) return;
     out[key] = [value];
   });
   return out;
@@ -317,6 +394,12 @@ function normalizeUpstreamMode(value: string): string {
     case "codex-login-transport":
     case "codex_login_transport":
       return "codex-login";
+    case "claude":
+    case "claude_code":
+    case "claude-code-login":
+    case "claude_code_login":
+    case "anthropic":
+      return "claude-code";
     default:
       return value;
   }
@@ -443,6 +526,83 @@ function codexLoginResponsesPath(path: string): string {
   }
 }
 
+interface ClaudeCodeAuth {
+  type: "api-key" | "auth-token";
+  value: string;
+}
+
+async function loadClaudeCodeAuth(cfg: AgentConfig): Promise<ClaudeCodeAuth> {
+  const apiKey = trim(cfg.anthropic_api_key);
+  if (apiKey) return { type: "api-key", value: apiKey };
+  const envToken = trimBearer(cfg.anthropic_auth_token);
+  if (envToken) return { type: "auth-token", value: envToken };
+  const claudeCodeOAuthToken = trimBearer(cfg.claude_code_oauth_token);
+  if (claudeCodeOAuthToken) return { type: "auth-token", value: claudeCodeOAuthToken };
+
+  const credentialsPath = claudeCredentialsPath(cfg);
+  const text = await Bun.file(credentialsPath).text().catch((error) => {
+    throw new Error(`read Claude Code credentials: ${error}`);
+  });
+  const credentials = safeJSONParse<any>(text);
+  if (!credentials || typeof credentials !== "object") throw new Error(`invalid Claude Code credentials JSON at ${credentialsPath}`);
+  const token = trimBearer(firstStringAtPaths(credentials, [
+    ["claudeAiOauth", "accessToken"],
+    ["claudeAiOauth", "access_token"],
+    ["claudeAiOauth", "token"],
+    ["oauth", "accessToken"],
+    ["oauth", "access_token"],
+    ["accessToken"],
+    ["access_token"],
+    ["authToken"],
+    ["auth_token"],
+  ]));
+  if (!token) {
+    throw new Error(`Claude Code access token is missing in ${credentialsPath}; set SELLER_ANTHROPIC_AUTH_TOKEN or SELLER_ANTHROPIC_API_KEY`);
+  }
+  return { type: "auth-token", value: token };
+}
+
+function claudeCredentialsPath(cfg: AgentConfig): string {
+  return `${cfg.claude_home.replace(/\/+$/, "")}/.credentials.json`;
+}
+
+function firstStringAtPaths(root: any, paths: string[][]): string {
+  for (const path of paths) {
+    let value = root;
+    for (const key of path) {
+      value = value?.[key];
+    }
+    const text = trim(value);
+    if (text) return text;
+  }
+  return "";
+}
+
+function trimBearer(value: string): string {
+  const text = trim(value);
+  return text.toLowerCase().startsWith("bearer ") ? trim(text.slice("bearer ".length)) : text;
+}
+
+function claudeCodeMessagesPath(path: string): string {
+  try {
+    const parsed = path.startsWith("http://") || path.startsWith("https://") ? new URL(path) : new URL(path || "/", "http://subi.local");
+    const clean = parsed.pathname.replace(/\/+$/, "") || "/";
+    const query = parsed.search || "";
+    if (clean === "/v1/messages" || clean === "/messages") return `/v1/messages${query}`;
+    if (clean.startsWith("/v1/messages/")) return `/v1/messages/${clean.slice("/v1/messages/".length)}${query}`;
+    if (clean.startsWith("/messages/")) return `/v1/messages/${clean.slice("/messages/".length)}${query}`;
+    return "";
+  } catch {
+    return "";
+  }
+}
+
+function anthropicURL(baseURL: string, upstreamPath: string): string {
+  const base = baseURL.replace(/\/+$/, "");
+  if (base.endsWith("/v1") && upstreamPath.startsWith("/v1/")) return `${base}${upstreamPath.slice("/v1".length)}`;
+  return `${base}${upstreamPath}`;
+}
+
 function codexLoginHeaders(env: SubiEnvelope, auth: CodexLoginAuth): Headers {
   const headers = bagToFetchHeaders(env.headers);
   for (const key of [
@@ -466,6 +626,42 @@ function codexLoginHeaders(env: SubiEnvelope, auth: CodexLoginAuth): Headers {
   headers.set("User-Agent", `subi-seller-agent/${sellerAgentVersion}`);
   headers.set("version", sellerAgentVersion);
   return headers;
+}
+
+function claudeCodeHeaders(env: SubiEnvelope, cfg: AgentConfig, auth: ClaudeCodeAuth): Headers {
+  const headers = bagToFetchHeaders(env.headers);
+  for (const key of [
+    "authorization",
+    "x-api-key",
+    "x-goog-api-key",
+    "cookie",
+    "host",
+    "content-length",
+    "connection",
+  ]) {
+    headers.delete(key);
+  }
+  if (auth.type === "api-key") headers.set("X-Api-Key", auth.value);
+  else {
+    headers.set("Authorization", `Bearer ${auth.value}`);
+    ensureAnthropicBeta(headers, ["claude-code-20250219", "oauth-2025-04-20"]);
+  }
+  if (!headers.get("anthropic-version")) headers.set("anthropic-version", cfg.anthropic_version);
+  if (!headers.get("Accept")) headers.set("Accept", env.stream ? "text/event-stream" : "application/json, text/event-stream");
+  headers.set("Content-Type", "application/json");
+  headers.set("User-Agent", `subi-seller-agent/${sellerAgentVersion}`);
+  return headers;
+}
+
+function ensureAnthropicBeta(headers: Headers, required: string[]): void {
+  const existing = (headers.get("anthropic-beta") || "")
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  for (const beta of required) {
+    if (!existing.includes(beta)) existing.push(beta);
+  }
+  if (existing.length > 0) headers.set("anthropic-beta", existing.join(","));
 }
 
 function requestTimeoutMS(env: SubiEnvelope): number {

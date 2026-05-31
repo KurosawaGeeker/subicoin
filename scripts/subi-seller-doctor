@@ -40,7 +40,20 @@ pass "gateway_ws=$SUBI_GATEWAY_WS_URL"
 pass "node_token=$(mask_secret "$SUBI_SELLER_NODE_TOKEN")"
 pass "upstream_mode=$SELLER_UPSTREAM_MODE"
 
-[[ "${SELLER_UPSTREAM_MODE}" == "codex-login" ]] || fail "unsupported upstream mode: $SELLER_UPSTREAM_MODE"
-[[ -n "${SELLER_CODEX_HOME:-${CODEX_HOME:-}}" ]] || fail "SELLER_CODEX_HOME or CODEX_HOME is not set"
+case "$SELLER_UPSTREAM_MODE" in
+  codex-login)
+    [[ -n "${SELLER_CODEX_HOME:-${CODEX_HOME:-}}" ]] || fail "SELLER_CODEX_HOME or CODEX_HOME is not set"
+    ;;
+  claude-code)
+    [[ -n "${SELLER_CLAUDE_HOME:-${CLAUDE_CONFIG_DIR:-}}" ]] || fail "SELLER_CLAUDE_HOME or CLAUDE_CONFIG_DIR is not set"
+    if [[ -z "${SELLER_ANTHROPIC_AUTH_TOKEN:-${ANTHROPIC_AUTH_TOKEN:-}}" && -z "${SELLER_ANTHROPIC_API_KEY:-${ANTHROPIC_API_KEY:-}}" && -z "${SELLER_CLAUDE_CODE_OAUTH_TOKEN:-${CLAUDE_CODE_OAUTH_TOKEN:-}}" ]]; then
+      CREDENTIALS_FILE="${SELLER_CLAUDE_HOME:-${CLAUDE_CONFIG_DIR:-$HOME/.claude}}/.credentials.json"
+      [[ -f "$CREDENTIALS_FILE" ]] || fail "Claude Code credentials not found: $CREDENTIALS_FILE"
+    fi
+    ;;
+  *)
+    fail "unsupported upstream mode: $SELLER_UPSTREAM_MODE"
+    ;;
+esac
 
 pass "seller environment is ready"

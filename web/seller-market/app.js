@@ -82,21 +82,20 @@ function providerContent() {
     },
     claude: {
       title: "Claude Code 订阅",
-      tag: "目标形态",
+      tag: "Anthropic Messages",
       note:
-        "Claude Code 供给模式是产品目标形态。当前 MVP 先保留为等待名单占位。",
-      config: `# 即将开放
-# 本地客户端会复用这台机器上的 Claude Code 订阅态。
-# 当前先使用 Codex Provider 完成实验。`,
-      start: `# 该 Provider 开放后，在收益后台加入等待名单。`,
+        "复用这台机器上的 Claude Code 凭据、claude setup-token、ANTHROPIC_AUTH_TOKEN 或 ANTHROPIC_API_KEY，只转发 Anthropic Messages 请求。",
+      config: installCommand,
+      start: `# macOS 上请先运行 claude setup-token，并把输出写入 config.env 的 SELLER_CLAUDE_CODE_OAUTH_TOKEN。
+# 也可以设置 SELLER_ANTHROPIC_AUTH_TOKEN / SELLER_ANTHROPIC_API_KEY。`,
     },
     http: {
       title: "本地 HTTP Upstream",
       tag: "暂停开放",
       note:
-        "当前产品边界只允许使用 Codex 登录态网络请求，本地 HTTP 模式暂不接入用户流量。",
-      config: `# 暂不开放。请使用 Codex 订阅模式。`,
-      start: `# 当前真实流量只调度 codex-login 节点。`,
+        "当前产品边界只允许使用 Codex 登录态或 Claude Code 凭据网络请求，本地 HTTP 模式暂不接入用户流量。",
+      config: `# 暂不开放。请使用 Codex 或 Claude Code 订阅模式。`,
+      start: `# 当前真实流量只调度 codex-login 和 claude-code 节点。`,
     },
     vps: {
       title: "VPS Headless",
@@ -576,7 +575,7 @@ async function handleAuthAction() {
 }
 
 function onboardingProvider() {
-  return "codex-login";
+  return sellerState.activeProvider === "claude" ? "claude-code" : "codex-login";
 }
 
 async function ensureSellerNode() {
@@ -587,7 +586,7 @@ async function ensureSellerNode() {
     return matchingNode;
   }
 
-  const nodeID = defaultNodeID();
+  const nodeID = provider === "codex-login" ? defaultNodeID() : `${defaultNodeID()}-${provider}`;
   let payload;
   try {
     payload = await api("/api/web/seller/nodes", {
