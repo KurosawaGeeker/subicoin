@@ -232,17 +232,73 @@ describe("seller-agent codex-login upstream", () => {
     await handleRequest(cfg, socket, env);
 
     expect(upstreamPath).toBe("/v1/messages?trace=1");
-    expect(upstreamBody).toBe(new TextDecoder().decode(env.body));
+    const body = JSON.parse(upstreamBody);
+    expect(body.model).toBe("claude-sonnet-4-5-20250929");
+    expect(body.system?.[0]?.text).toBe("You are Claude Code, Anthropic's official CLI for Claude.");
+    expect(body.metadata?.user_id).toMatch(/^user_[a-f0-9]{64}_account__session_[a-f0-9-]{36}$/);
+    expect(body.tools).toEqual([]);
+    expect(body.temperature).toBe(1);
+    expect(body.max_tokens).toBe(128);
     expect(upstreamHeaders.authorization).toBe("Bearer claude-oauth-token");
     expect(upstreamHeaders["x-api-key"]).toBeUndefined();
     expect(upstreamHeaders["anthropic-version"]).toBe("2023-06-01");
     expect(upstreamHeaders["anthropic-beta"]).toContain("claude-code-20250219");
     expect(upstreamHeaders["anthropic-beta"]).toContain("oauth-2025-04-20");
-    expect(upstreamHeaders["user-agent"]).toContain("subi-seller-agent");
+    expect(upstreamHeaders["anthropic-beta"]).toContain("prompt-caching-scope-2026-01-05");
+    expect(upstreamHeaders["anthropic-beta"]).toContain("context-management-2025-06-27");
+    expect(upstreamHeaders["user-agent"]).toBe("claude-cli/2.1.92 (external, cli)");
+    expect(upstreamHeaders["x-app"]).toBe("cli");
+    expect(upstreamHeaders["anthropic-dangerous-direct-browser-access"]).toBe("true");
+    expect(upstreamHeaders["x-stainless-lang"]).toBe("js");
+    expect(upstreamHeaders["x-client-request-id"]).toMatch(/[a-f0-9-]{36}/);
+    expect(upstreamHeaders["x-claude-code-session-id"]).toMatch(/[a-f0-9-]{36}/);
     const start = socket.sent.find((sent) => sent.type === subiEnvelopeResponseStart);
     expect(start?.headers?.["X-Subi-Upstream-Mode"]).toEqual(["claude-code"]);
     const chunk = socket.sent.find((sent) => sent.type === subiEnvelopeResponseChunk);
     expect(new TextDecoder().decode(chunk?.data)).toContain("CLAUDE_OK");
+  });
+
+  test("mimics Claude Code body shape and moves non-Claude system prompts into messages", async () => {
+    let upstreamBody: any;
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      async fetch(req) {
+        upstreamBody = await req.json();
+        return new Response(JSON.stringify({ content: [{ type: "text", text: "CLAUDE_MIMIC_OK" }] }), { headers: { "Content-Type": "application/json" } });
+      },
+    });
+    servers.push(server);
+
+    const env = anthropicEnvelope("req-claude-mimic", "hello mimic");
+    env.body = new TextEncoder().encode(
+      JSON.stringify({
+        model: "claude-opus-4-5",
+        system: "Always answer tersely.",
+        messages: [{ role: "user", content: "hello mimic" }],
+        thinking: { type: "enabled" },
+      }),
+    );
+
+    const socket = new CollectingSocket();
+    await handleRequest(
+      agentConfig({
+        upstream_mode: "claude-code",
+        anthropic_base_url: server.url.toString().replace(/\/$/, ""),
+        claude_code_oauth_token: "claude-code-oauth-token",
+      }),
+      socket,
+      env,
+    );
+
+    expect(upstreamBody.model).toBe("claude-opus-4-5-20251101");
+    expect(upstreamBody.system).toEqual([{ type: "text", text: "You are Claude Code, Anthropic's official CLI for Claude." }]);
+    expect(upstreamBody.messages[0].content[0].text).toContain("[System Instructions]\nAlways answer tersely.");
+    expect(upstreamBody.messages[1].content[0].text).toBe("Understood. I will follow these instructions.");
+    expect(upstreamBody.messages[2]).toEqual({ role: "user", content: "hello mimic" });
+    expect(upstreamBody.context_management).toEqual({ edits: [{ type: "clear_thinking_20251015", keep: "all" }] });
+    expect(upstreamBody.max_tokens).toBe(128000);
+    expect(upstreamBody.temperature).toBe(1);
   });
 
   test("loads Claude Code OAuth token from credentials file", async () => {
